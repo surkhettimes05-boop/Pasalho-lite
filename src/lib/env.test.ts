@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseEnv } from "@/lib/env";
 
-const base = {
+const base: NodeJS.ProcessEnv = {
   NODE_ENV: "production",
   DATABASE_URL: "postgresql://user:pass@db.internal:5432/pasalho",
   SESSION_TTL_HOURS: "12",
