@@ -5,6 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, LocationType, Role } from "../src/generated/prisma/client";
 
 const seedEnvSchema = z.object({
+  APP_ENV: z.enum(["development", "test", "staging", "production"]).default("development"),
   DATABASE_URL: z.string().min(1),
   SEED_OWNER_EMAIL: z.string().email(),
   SEED_OWNER_PASSWORD: z.string().min(12),
@@ -12,6 +13,13 @@ const seedEnvSchema = z.object({
 });
 
 const env = seedEnvSchema.parse(process.env);
+
+if (env.APP_ENV === "production") {
+  throw new Error(
+    "Production seed is disabled. Use the controlled Owner/Admin bootstrap procedure instead.",
+  );
+}
+
 const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
