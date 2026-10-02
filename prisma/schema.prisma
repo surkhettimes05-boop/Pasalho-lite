@@ -67,24 +67,37 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum LoyaltyTransactionType {
+  EARN
+  REVERSAL
+  ADJUSTMENT
+}
+
+enum LoyaltySourceType {
+  SALE
+  CUSTOMER_ORDER
+  MANUAL
+}
+
 model User {
-  id                  String              @id @default(uuid())
+  id                  String               @id @default(uuid())
   name                String
-  email               String              @unique
+  email               String               @unique
   passwordHash        String
   role                Role
-  active              Boolean             @default(true)
+  active              Boolean              @default(true)
   sessions            Session[]
   inventoryMovements  InventoryMovement[]
   purchaseReceipts    PurchaseReceipt[]
-  transfersCreated    Transfer[]          @relation("TransferCreatedBy")
-  transfersDispatched Transfer[]          @relation("TransferDispatchedBy")
-  transfersReceived   Transfer[]          @relation("TransferReceivedBy")
-  salesFinalized      Sale[]              @relation("SaleFinalizedBy")
-  paymentsRecorded    Payment[]           @relation("PaymentRecordedBy")
+  transfersCreated    Transfer[]           @relation("TransferCreatedBy")
+  transfersDispatched Transfer[]           @relation("TransferDispatchedBy")
+  transfersReceived   Transfer[]           @relation("TransferReceivedBy")
+  salesFinalized      Sale[]               @relation("SaleFinalizedBy")
+  paymentsRecorded    Payment[]            @relation("PaymentRecordedBy")
+  loyaltyTransactions LoyaltyTransaction[]
   auditLogs           AuditLog[]
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@index([role])
 }
@@ -270,6 +283,51 @@ model TransferItem {
   @@index([productId])
 }
 
+model Customer {
+  id               String               @id @default(uuid())
+  phoneNormalized  String               @unique
+  phoneDisplay     String
+  name             String?
+  notes            String?
+  active           Boolean              @default(true)
+  loyaltyAccount   LoyaltyAccount?
+  loyaltyTransactions LoyaltyTransaction[]
+  sales            Sale[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([name])
+  @@index([active])
+}
+
+model LoyaltyAccount {
+  id             String   @id @default(uuid())
+  customerId     String   @unique
+  pointBalance   Int      @default(0)
+  spendRemainder Decimal  @default(0) @db.Decimal(14, 2)
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  updatedAt      DateTime @updatedAt
+}
+
+model LoyaltyTransaction {
+  id                 String                 @id @default(uuid())
+  customerId         String
+  type               LoyaltyTransactionType
+  pointsDelta        Int
+  eligibleSpendDelta Decimal                @db.Decimal(14, 2)
+  sourceType         LoyaltySourceType
+  sourceId           String
+  idempotencyKey     String                 @unique
+  reason             String?
+  actorUserId        String?
+  customer           Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  actor              User?                  @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt          DateTime               @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([sourceType, sourceId])
+}
+
 model Sale {
   id                String        @id @default(uuid())
   receiptNumber     String        @unique
@@ -284,6 +342,7 @@ model Sale {
   finalizedByUserId String
   idempotencyKey    String        @unique
   storeLocation     Location      @relation(fields: [storeLocationId], references: [id], onDelete: Restrict)
+  customer          Customer?     @relation(fields: [customerId], references: [id], onDelete: Restrict)
   finalizedBy       User          @relation("SaleFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: Restrict)
   items             SaleItem[]
   createdAt         DateTime      @default(now())

@@ -19,6 +19,7 @@ export const finalizeSaleInputSchema = z
       PaymentMethod.CASH,
       PaymentMethod.QR_NON_CASH,
     ]),
+    customerId: z.string().uuid().nullable().optional(),
     items: z.array(saleItemSchema).min(1).max(100),
   })
   .superRefine((value, context) => {
