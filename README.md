@@ -74,6 +74,9 @@ The product specification is split into focused documents:
 - [Feature Specifications & Limits](docs/FEATURE_SPECIFICATIONS.md)
 - [Coding Agent Contract](docs/CODING_AGENT_CONTRACT.md)
 - [Repository Agent Instructions](AGENTS.md)
+- [Production Operations Runbook](docs/OPERATIONS_RUNBOOK.md)
+- [Scanner & Printer Validation](docs/HARDWARE_VALIDATION.md)
+- [Production Release Checklist](docs/PRODUCTION_RELEASE_CHECKLIST.md)
 
 ## V1 definition of done
 
