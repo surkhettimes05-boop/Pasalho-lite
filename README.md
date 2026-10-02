@@ -70,6 +70,7 @@ The product specification is split into focused documents:
 - [Acceptance Tests & Release Gate](docs/ACCEPTANCE_TESTS.md)
 - [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
 - [Locked Product Decisions](docs/DECISIONS.md)
+- [Architecture Guardrails](docs/ARCHITECTURE.md)
 
 ## V1 definition of done
 
