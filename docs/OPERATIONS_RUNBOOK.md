@@ -138,3 +138,20 @@ Database rollback:
 - prefer forward fixes when data integrity permits.
 
 Always retain the pre-release backup until the release is proven stable.
+
+## 9. Dependency security overrides
+
+Pasalho Lite pins two transitive dependencies through `package.json#overrides` while remaining on the production-supported Prisma 7 line:
+
+- `deepmerge-ts=8.0.0` — patches GHSA-ggr8-5vv4-36mx.
+- `mysql2=3.23.1` — patches the MySQL2 advisories reported against versions `<=3.23.0`.
+
+Pasalho uses PostgreSQL, not MySQL. The mysql2 dependency arrives transitively through Prisma tooling, but it is still overridden rather than ignored.
+
+Removal rule:
+
+1. upgrade to a supported Prisma release whose dependency tree no longer contains the affected versions;
+2. remove the override;
+3. rerun the full high-severity audit, migrations, tests, backup/restore and canonical E2E gate.
+
+Do not run `npm audit fix --force` blindly: the current audit recommendation proposes a breaking Prisma major-line change.
