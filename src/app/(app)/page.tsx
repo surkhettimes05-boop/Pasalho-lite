@@ -71,7 +71,7 @@ export default async function DashboardPage() {
           <article className="summary-card">
             <span>Pending COD</span>
             <strong>{money(report.codPendingAmount)}</strong>
-            <small>{report.openCodOrders.length} open order(s) shown</small>
+            <small>{report.openCodCount} open order(s)</small>
           </article>
         </section>
       ) : null}
@@ -129,7 +129,7 @@ export default async function DashboardPage() {
         {report.visibility.transfers ? (
           <article className="summary-card">
             <span>Open transfers</span>
-            <strong>{report.openTransfers.length}</strong>
+            <strong>{report.openTransferCount}</strong>
             <small>Draft, ready or dispatched</small>
           </article>
         ) : null}
