@@ -5,7 +5,6 @@ import { logoutAction } from "@/app/(app)/actions";
 import type { SessionUser } from "@/lib/auth/session";
 
 const plannedModules = [
-  "Returns",
   "Expenses",
   "Daily Close",
   "Reports",
@@ -58,6 +57,9 @@ export function AppShell({
               </Link>
               <Link className="nav-item" href="/orders">
                 Orders
+              </Link>
+              <Link className="nav-item" href="/returns">
+                Returns
               </Link>
             </>
           ) : null}

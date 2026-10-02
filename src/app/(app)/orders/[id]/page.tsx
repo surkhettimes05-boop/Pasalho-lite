@@ -73,6 +73,15 @@ export default async function OrderDetailPage({
           <a className="secondary-light-button" href={whatsappHref} target="_blank" rel="noreferrer">
             Open WhatsApp
           </a>
+          {(order.status === CustomerOrderStatus.DISPATCHED ||
+            order.status === CustomerOrderStatus.DELIVERED) ? (
+            <Link
+              className="text-link"
+              href={`/returns/new?sourceType=CUSTOMER_ORDER&sourceId=${order.id}`}
+            >
+              Return / recover
+            </Link>
+          ) : null}
           <Link className="text-link" href="/orders">Back to orders</Link>
         </div>
       </header>
@@ -180,7 +189,7 @@ export default async function OrderDetailPage({
           <p className="eyebrow">Next action</p>
           <h3>{order.status}</h3>
           <p className="muted">
-            State skipping is blocked. After dispatch, cancellation is not allowed; use the future return/recovery workflow.
+            State skipping is blocked. After dispatch, use Returns for explicit recovery/refund instead of silent cancellation.
           </p>
         </div>
         <div className="transfer-action-row">
