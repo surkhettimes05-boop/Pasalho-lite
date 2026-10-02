@@ -212,7 +212,11 @@ export default async function OrderDetailPage({
               <button className="primary-button" type="submit">Delivered + COD collected</button>
             </form>
           ) : null}
-          {[CustomerOrderStatus.NEW, CustomerOrderStatus.CONFIRMED, CustomerOrderStatus.PACKED].includes(order.status) ? (
+          {(
+            order.status === CustomerOrderStatus.NEW ||
+            order.status === CustomerOrderStatus.CONFIRMED ||
+            order.status === CustomerOrderStatus.PACKED
+          ) ? (
             <form action={cancelCustomerOrderAction}>
               <input type="hidden" name="orderId" value={order.id} />
               <input type="hidden" name="idempotencyKey" value={randomUUID()} />
