@@ -27,15 +27,15 @@ export async function recordCashMovementAction(formData: FormData) {
   const typeValue = value(formData, "type");
   const effectValue = value(formData, "effect");
 
-  if (
-    ![
-      CashMovementType.OPENING_CASH,
-      CashMovementType.CASH_ADDED,
-      CashMovementType.EXPENSE,
-      CashMovementType.CASH_PAYOUT,
-      CashMovementType.OTHER_APPROVED,
-    ].includes(typeValue as CashMovementType)
-  ) {
+  const manualTypes = new Set<string>([
+    CashMovementType.OPENING_CASH,
+    CashMovementType.CASH_ADDED,
+    CashMovementType.EXPENSE,
+    CashMovementType.CASH_PAYOUT,
+    CashMovementType.OTHER_APPROVED,
+  ]);
+
+  if (!manualTypes.has(typeValue)) {
     redirect(`/cash?date=${operatingDate}&error=INVALID_CASH_MOVEMENT`);
   }
 
