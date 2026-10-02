@@ -71,6 +71,9 @@ The product specification is split into focused documents:
 - [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
 - [Locked Product Decisions](docs/DECISIONS.md)
 - [Architecture Guardrails](docs/ARCHITECTURE.md)
+- [Feature Specifications & Limits](docs/FEATURE_SPECIFICATIONS.md)
+- [Coding Agent Contract](docs/CODING_AGENT_CONTRACT.md)
+- [Repository Agent Instructions](AGENTS.md)
 
 ## V1 definition of done
 
