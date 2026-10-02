@@ -129,9 +129,13 @@ BEGIN
         END IF;
     END IF;
 
-    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+    IF TG_OP = 'DELETE' THEN
+      RETURN OLD;
+    END IF;
+
+    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 
 CREATE TRIGGER "PurchaseReceipt_protect_posted"
 BEFORE UPDATE OR DELETE ON "PurchaseReceipt"
