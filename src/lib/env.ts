@@ -9,7 +9,7 @@ const baseEnvSchema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().positive().max(168).default(12),
 });
 
-export function parseEnv(input: NodeJS.ProcessEnv) {
+export function parseEnv(input: Record<string, string | undefined>) {
   const parsed = baseEnvSchema.parse(input);
 
   if (!/^postgres(?:ql)?:\/\//i.test(parsed.DATABASE_URL)) {
