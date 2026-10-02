@@ -384,3 +384,97 @@ export async function reconcileInventoryBalance(
     matches: projectedOnHand.equals(ledgerOnHand),
   };
 }
+
+
+export async function recordPhysicalInventoryMovement(
+  tx: Prisma.TransactionClient,
+  input: {
+    productId: string;
+    locationId: string;
+    type: InventoryMovementType;
+    quantityDelta: Prisma.Decimal;
+    referenceType: string;
+    referenceId: string;
+    idempotencyKey: string;
+    reason?: string | null;
+    actorUserId: string;
+  },
+) {
+  if (input.quantityDelta.isZero()) {
+    throw new BusinessError(
+      "INVALID_INVENTORY_MOVEMENT",
+      "Inventory movement quantity cannot be zero.",
+    );
+  }
+
+  const balance = await tx.stockBalance.findUnique({
+    where: {
+      productId_locationId: {
+        productId: input.productId,
+        locationId: input.locationId,
+      },
+    },
+  });
+
+  const currentOnHand = balance?.onHand ?? new Prisma.Decimal(0);
+  const currentReserved = balance?.reserved ?? new Prisma.Decimal(0);
+  const nextOnHand = currentOnHand.add(input.quantityDelta);
+
+  if (nextOnHand.isNegative()) {
+    throw new BusinessError(
+      "INSUFFICIENT_STOCK",
+      "Inventory movement would make physical stock negative.",
+    );
+  }
+
+  if (nextOnHand.lessThan(currentReserved)) {
+    throw new BusinessError(
+      "RESERVED_STOCK_CONFLICT",
+      "Inventory movement would reduce stock below reserved quantity.",
+    );
+  }
+
+  const movement = await tx.inventoryMovement.create({
+    data: {
+      productId: input.productId,
+      locationId: input.locationId,
+      type: input.type,
+      quantityDelta: input.quantityDelta,
+      referenceType: input.referenceType,
+      referenceId: input.referenceId,
+      idempotencyKey: input.idempotencyKey,
+      reason: input.reason ?? null,
+      actorUserId: input.actorUserId,
+    },
+  });
+
+  await tx.stockBalance.upsert({
+    where: {
+      productId_locationId: {
+        productId: input.productId,
+        locationId: input.locationId,
+      },
+    },
+    create: {
+      productId: input.productId,
+      locationId: input.locationId,
+      onHand: nextOnHand,
+      reserved: currentReserved,
+    },
+    update: {
+      onHand: nextOnHand,
+    },
+  });
+
+  return {
+    movement,
+    before: {
+      onHand: currentOnHand,
+      reserved: currentReserved,
+    },
+    after: {
+      onHand: nextOnHand,
+      reserved: currentReserved,
+    },
+  };
+}
