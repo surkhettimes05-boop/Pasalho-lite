@@ -553,3 +553,129 @@ p {
   display: flex;
   gap: 1rem;
 }
+
+.receive-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.receipt-lines {
+  border-top: 1px solid var(--line);
+  padding-top: 1.25rem;
+}
+
+.receipt-line {
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(260px, 2fr) minmax(110px, 0.7fr) minmax(130px, 0.8fr) auto;
+  padding: 1rem 0;
+}
+
+.receipt-product-field label,
+.receipt-line > label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  font-weight: 700;
+  gap: 0.4rem;
+}
+
+.receipt-product-field input,
+.receipt-line > label input {
+  background: #fff;
+  border: 1px solid #cbd5cd;
+  border-radius: 0.65rem;
+  color: var(--text);
+  min-height: 42px;
+  outline: none;
+  padding: 0.7rem 0.8rem;
+  width: 100%;
+}
+
+.receipt-product-field small {
+  color: var(--muted);
+  display: block;
+  font-size: 0.72rem;
+  margin-top: 0.35rem;
+}
+
+.receive-submit {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.receive-submit p {
+  margin-bottom: 0;
+  max-width: 680px;
+}
+
+.danger-link {
+  color: #a12828;
+  margin-bottom: 0.8rem;
+}
+
+.empty-state {
+  padding: 1.5rem 0;
+  text-align: center;
+}
+
+.receipt-meta {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.receipt-meta div {
+  background: var(--surface-soft);
+  border-radius: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.9rem;
+}
+
+.receipt-meta span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.summary-text {
+  font-size: 1rem !important;
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .receipt-line {
+    align-items: stretch;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .receipt-product-field {
+    grid-column: span 2;
+  }
+
+  .receipt-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .receipt-line {
+    grid-template-columns: 1fr;
+  }
+
+  .receipt-product-field {
+    grid-column: span 1;
+  }
+
+  .receive-submit {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
