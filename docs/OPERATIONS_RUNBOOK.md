@@ -14,11 +14,11 @@ Required production environment:
 
 Never commit production secrets.
 
-### First Owner/Admin bootstrap
+### First production bootstrap
 
 The normal seed command is intentionally blocked in production so it cannot reset a live owner password.
 
-After migrations have been applied to a new empty production database, create the first Owner/Admin exactly once:
+After migrations have been applied to a new empty production database, bootstrap the locked V1 operating data exactly once. This creates the **Central Warehouse**, **Pasalho Store**, and the first **Owner/Admin** in one transaction:
 
 ```bash
 APP_ENV=production \
@@ -29,7 +29,7 @@ BOOTSTRAP_OWNER_NAME="Pasalho Owner" \
 npm run admin:bootstrap-owner
 ```
 
-The bootstrap refuses to run if an active Owner/Admin already exists. After bootstrap, manage staff only through **Users / Audit**.
+The bootstrap refuses to run if an active Owner/Admin already exists. It creates/repairs only the two locked V1 locations and the initial owner; it does not seed fake products, sales or orders. After bootstrap, manage staff only through **Users / Audit**.
 
 ## 2. Release sequence
 
