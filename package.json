@@ -18,7 +18,11 @@
     "prisma:validate": "prisma validate",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:backup": "bash scripts/db-backup.sh",
+    "db:restore": "bash scripts/db-restore.sh",
+    "db:verify-restore": "tsx scripts/verify-restore.ts",
+    "release:e2e": "tsx scripts/canonical-e2e.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
