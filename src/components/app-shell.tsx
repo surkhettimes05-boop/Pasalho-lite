@@ -1,6 +1,7 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
-import type { SessionUser } from "@/lib/auth/session";
 import { logoutAction } from "@/app/(app)/actions";
+import type { SessionUser } from "@/lib/auth/session";
 
 const plannedModules = [
   "Products",
@@ -34,9 +35,9 @@ export function AppShell({
         </div>
 
         <nav aria-label="Primary navigation">
-          <a className="nav-item nav-item-active" href="/">
+          <Link className="nav-item nav-item-active" href="/">
             Dashboard
-          </a>
+          </Link>
           {plannedModules.map((module) => (
             <span className="nav-item nav-item-disabled" key={module}>
               {module}
