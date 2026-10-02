@@ -13,10 +13,7 @@ import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
 import { reconcileInventoryBalance } from "@/modules/inventory/inventory.service";
-import {
-  finalizeSale,
-  type PaymentMethod as PosPaymentMethod,
-} from "@/modules/pos/pos.service";
+import { finalizeSale } from "@/modules/pos/pos.service";
 import { createProduct, updateProduct } from "@/modules/products/product.service";
 import { postPurchaseReceipt } from "@/modules/receiving/receipt.service";
 import { createSupplier } from "@/modules/receiving/supplier.service";
@@ -326,7 +323,7 @@ describe("Phase 4 POS", () => {
   it("ignores manipulated client price/total fields and uses current server price", async () => {
     const manipulated = {
       idempotencyKey: `phase4-manipulated-${suffix}`,
-      paymentMethod: PaymentMethod.QR_NON_CASH as PosPaymentMethod,
+      paymentMethod: PaymentMethod.QR_NON_CASH,
       clientTotal: "1.00",
       clientUnitPrice: "1.00",
       discountTotal: "9999.00",
