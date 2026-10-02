@@ -191,21 +191,40 @@ export async function getCustomerPage({
 }
 
 export async function getCustomerById(customerId: string) {
-  return prisma.customer.findUnique({
-    where: { id: customerId },
-    include: {
-      loyaltyAccount: true,
-      loyaltyTransactions: {
-        orderBy: { createdAt: "desc" },
-        take: 100,
-      },
-      sales: {
-        orderBy: { finalizedAt: "desc" },
-        take: 50,
-        include: {
-          items: true,
+  const [customer, eligibleSpendAggregate] = await Promise.all([
+    prisma.customer.findUnique({
+      where: { id: customerId },
+      include: {
+        loyaltyAccount: true,
+        loyaltyTransactions: {
+          orderBy: { createdAt: "desc" },
+          take: 100,
+        },
+        sales: {
+          orderBy: { finalizedAt: "desc" },
+          take: 50,
+          include: {
+            items: true,
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.loyaltyTransaction.aggregate({
+      where: { customerId },
+      _sum: {
+        eligibleSpendDelta: true,
+      },
+    }),
+  ]);
+
+  if (!customer) {
+    return null;
+  }
+
+  return {
+    ...customer,
+    loyaltyEligibleSpendTotal:
+      eligibleSpendAggregate._sum.eligibleSpendDelta ??
+      new Prisma.Decimal(0),
+  };
 }
