@@ -478,3 +478,76 @@ export async function recordPhysicalInventoryMovement(
     },
   };
 }
+
+
+export async function changeInventoryReserved(
+  tx: Prisma.TransactionClient,
+  input: {
+    productId: string;
+    locationId: string;
+    quantityDelta: Prisma.Decimal;
+  },
+) {
+  if (input.quantityDelta.isZero()) {
+    throw new BusinessError(
+      "INVALID_RESERVATION_CHANGE",
+      "Reserved quantity change cannot be zero.",
+    );
+  }
+
+  const balance = await tx.stockBalance.findUnique({
+    where: {
+      productId_locationId: {
+        productId: input.productId,
+        locationId: input.locationId,
+      },
+    },
+  });
+
+  const currentOnHand = balance?.onHand ?? new Prisma.Decimal(0);
+  const currentReserved = balance?.reserved ?? new Prisma.Decimal(0);
+  const nextReserved = currentReserved.add(input.quantityDelta);
+
+  if (nextReserved.isNegative()) {
+    throw new BusinessError(
+      "RESERVATION_INTEGRITY_ERROR",
+      "Reserved quantity cannot become negative.",
+    );
+  }
+
+  if (nextReserved.greaterThan(currentOnHand)) {
+    throw new BusinessError(
+      "INSUFFICIENT_STOCK",
+      "Reservation would exceed physical on-hand stock.",
+    );
+  }
+
+  await tx.stockBalance.upsert({
+    where: {
+      productId_locationId: {
+        productId: input.productId,
+        locationId: input.locationId,
+      },
+    },
+    create: {
+      productId: input.productId,
+      locationId: input.locationId,
+      onHand: currentOnHand,
+      reserved: nextReserved,
+    },
+    update: {
+      reserved: nextReserved,
+    },
+  });
+
+  return {
+    before: {
+      onHand: currentOnHand,
+      reserved: currentReserved,
+    },
+    after: {
+      onHand: currentOnHand,
+      reserved: nextReserved,
+    },
+  };
+}
