@@ -392,7 +392,7 @@ export default async function ReportsPage({
               </div>
               <div>
                 <span>Open collections</span>
-                <strong>{data.pendingCod.length}</strong>
+                <strong>{data.pendingCodCount}</strong>
               </div>
             </div>
           </article>
