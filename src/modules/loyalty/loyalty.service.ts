@@ -28,13 +28,18 @@ function projectionFromEligibleSpend(eligibleSpend: Prisma.Decimal) {
   };
 }
 
-function eligibleSpendFromAccount(account: {
-  pointBalance: number;
-  spendRemainder: Prisma.Decimal;
-}) {
-  return LOYALTY_THRESHOLD.mul(account.pointBalance).add(
-    account.spendRemainder,
-  );
+async function getEligibleSpendLedgerTotal(
+  tx: Prisma.TransactionClient,
+  customerId: string,
+) {
+  const aggregate = await tx.loyaltyTransaction.aggregate({
+    where: { customerId },
+    _sum: {
+      eligibleSpendDelta: true,
+    },
+  });
+
+  return aggregate._sum.eligibleSpendDelta ?? new Prisma.Decimal(0);
 }
 
 export async function applyEligibleSpend(
@@ -88,12 +93,16 @@ export async function applyEligibleSpend(
     update: {},
   });
 
-  const beforeEligible = eligibleSpendFromAccount(account);
+  const beforeEligible = await getEligibleSpendLedgerTotal(
+    tx,
+    input.customerId,
+  );
   const afterEligible = beforeEligible.add(input.eligibleSpend);
   const beforeProjection = projectionFromEligibleSpend(beforeEligible);
   const afterProjection = projectionFromEligibleSpend(afterEligible);
   const pointsDelta =
     afterProjection.pointBalance - beforeProjection.pointBalance;
+  const nextPointBalance = account.pointBalance + pointsDelta;
 
   const loyaltyTransaction = await tx.loyaltyTransaction.create({
     data: {
@@ -112,7 +121,7 @@ export async function applyEligibleSpend(
   await tx.loyaltyAccount.update({
     where: { customerId: input.customerId },
     data: {
-      pointBalance: afterProjection.pointBalance,
+      pointBalance: nextPointBalance,
       spendRemainder: afterProjection.spendRemainder,
     },
   });
@@ -195,12 +204,23 @@ export async function applyEligibleSpendReversal(
     );
   }
 
-  const beforeEligible = eligibleSpendFromAccount(account);
+  const beforeEligible = await getEligibleSpendLedgerTotal(
+    tx,
+    input.customerId,
+  );
   const afterEligible = beforeEligible.sub(input.amount);
   const beforeProjection = projectionFromEligibleSpend(beforeEligible);
   const afterProjection = projectionFromEligibleSpend(afterEligible);
   const pointsDelta =
     afterProjection.pointBalance - beforeProjection.pointBalance;
+  const nextPointBalance = account.pointBalance + pointsDelta;
+
+  if (nextPointBalance < 0) {
+    throw new BusinessError(
+      "LOYALTY_NEGATIVE_POINTS",
+      "Loyalty reversal would make the point balance negative.",
+    );
+  }
 
   const loyaltyTransaction = await tx.loyaltyTransaction.create({
     data: {
@@ -219,7 +239,7 @@ export async function applyEligibleSpendReversal(
   await tx.loyaltyAccount.update({
     where: { customerId: input.customerId },
     data: {
-      pointBalance: afterProjection.pointBalance,
+      pointBalance: nextPointBalance,
       spendRemainder: afterProjection.spendRemainder,
     },
   });
