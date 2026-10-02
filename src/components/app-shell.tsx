@@ -5,7 +5,6 @@ import { logoutAction } from "@/app/(app)/actions";
 import type { SessionUser } from "@/lib/auth/session";
 
 const plannedModules = [
-  "Transfers",
   "POS",
   "Customers",
   "Orders",
@@ -49,6 +48,9 @@ export function AppShell({
               Receive Stock
             </Link>
           ) : null}
+          <Link className="nav-item" href="/transfers">
+            Transfers
+          </Link>
           {plannedModules.map((module) => (
             <span className="nav-item nav-item-disabled" key={module}>
               {module}
