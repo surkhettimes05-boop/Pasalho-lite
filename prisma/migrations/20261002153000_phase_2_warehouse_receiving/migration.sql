@@ -135,7 +135,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER "PurchaseReceipt_protect_posted"
 BEFORE UPDATE OR DELETE ON "PurchaseReceipt"
