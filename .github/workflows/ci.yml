@@ -63,6 +63,47 @@ jobs:
       - name: Seed Phase 0 operating data
         run: npm run db:seed
 
+      - name: Verify production seed is blocked
+        shell: bash
+        run: |
+          if APP_ENV=production npm run db:seed; then
+            echo "Production seed unexpectedly succeeded."
+            exit 1
+          fi
+
+      - name: Prove controlled production Owner/Admin bootstrap
+        shell: bash
+        run: |
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d postgres \
+            -c 'DROP DATABASE IF EXISTS pasalho_bootstrap WITH (FORCE);'
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d postgres \
+            -c 'CREATE DATABASE pasalho_bootstrap;'
+
+          export DATABASE_URL='postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_bootstrap?schema=public'
+          npm run db:migrate:deploy
+
+          APP_ENV=production \
+          BOOTSTRAP_OWNER_EMAIL='bootstrap@ci.pasalho.test' \
+          BOOTSTRAP_OWNER_PASSWORD='ci-bootstrap-owner-password-strong' \
+          BOOTSTRAP_OWNER_NAME='CI Bootstrap Owner' \
+            npm run admin:bootstrap-owner
+
+          OWNER_COUNT="$(docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d pasalho_bootstrap -tAc \
+            \"SELECT COUNT(*) FROM \\\"User\\\" WHERE role='OWNER_ADMIN' AND active=true;\")"
+          test "$OWNER_COUNT" = "1"
+
+          if APP_ENV=production \
+            BOOTSTRAP_OWNER_EMAIL='second@ci.pasalho.test' \
+            BOOTSTRAP_OWNER_PASSWORD='another-bootstrap-password-strong' \
+            BOOTSTRAP_OWNER_NAME='Second Owner' \
+            npm run admin:bootstrap-owner; then
+            echo "Second bootstrap unexpectedly succeeded."
+            exit 1
+          fi
+
       - name: Typecheck
         run: npm run typecheck
 
