@@ -29,6 +29,12 @@ enum InventoryMovementType {
   ADJUSTMENT_OUT
 }
 
+enum PurchaseReceiptStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
 model User {
   id                 String              @id @default(uuid())
   name               String
@@ -38,6 +44,7 @@ model User {
   active             Boolean             @default(true)
   sessions           Session[]
   inventoryMovements InventoryMovement[]
+  purchaseReceipts   PurchaseReceipt[]
   auditLogs          AuditLog[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -72,22 +79,23 @@ model Location {
 }
 
 model Product {
-  id                String              @id @default(uuid())
-  sku               String              @unique
-  barcode           String?             @unique
-  name              String
-  category          String
-  unit              String
-  costPrice         Decimal             @db.Decimal(12, 2)
-  sellingPrice      Decimal             @db.Decimal(12, 2)
-  mrp               Decimal?            @db.Decimal(12, 2)
-  warehouseMinStock Decimal             @default(0) @db.Decimal(14, 3)
-  storeMinStock     Decimal             @default(0) @db.Decimal(14, 3)
-  active            Boolean             @default(true)
-  stockBalances     StockBalance[]
-  inventoryMovements InventoryMovement[]
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id                   String                @id @default(uuid())
+  sku                  String                @unique
+  barcode              String?               @unique
+  name                 String
+  category             String
+  unit                 String
+  costPrice            Decimal               @db.Decimal(12, 2)
+  sellingPrice         Decimal               @db.Decimal(12, 2)
+  mrp                  Decimal?              @db.Decimal(12, 2)
+  warehouseMinStock    Decimal               @default(0) @db.Decimal(14, 3)
+  storeMinStock        Decimal               @default(0) @db.Decimal(14, 3)
+  active               Boolean               @default(true)
+  stockBalances        StockBalance[]
+  inventoryMovements   InventoryMovement[]
+  purchaseReceiptItems PurchaseReceiptItem[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@index([name])
   @@index([category])
@@ -127,6 +135,54 @@ model InventoryMovement {
   @@index([productId, locationId, createdAt])
   @@index([referenceType, referenceId])
   @@index([actorUserId])
+}
+
+model Supplier {
+  id        String            @id @default(uuid())
+  name      String
+  phone     String?
+  notes     String?
+  active    Boolean           @default(true)
+  receipts  PurchaseReceipt[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([name])
+  @@index([active])
+}
+
+model PurchaseReceipt {
+  id                String                @id @default(uuid())
+  receiptNumber     String                @unique
+  supplierId        String?
+  supplierReference String?
+  status            PurchaseReceiptStatus @default(DRAFT)
+  receivedAt        DateTime
+  postedAt          DateTime?
+  postedByUserId    String?
+  notes             String?
+  idempotencyKey    String                @unique
+  supplier          Supplier?             @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  postedBy          User?                 @relation(fields: [postedByUserId], references: [id], onDelete: Restrict)
+  items             PurchaseReceiptItem[]
+  createdAt         DateTime              @default(now())
+
+  @@index([status, receivedAt])
+  @@index([supplierId, receivedAt])
+}
+
+model PurchaseReceiptItem {
+  id                String          @id @default(uuid())
+  purchaseReceiptId String
+  productId         String
+  quantity          Decimal         @db.Decimal(14, 3)
+  unitCost          Decimal         @db.Decimal(12, 2)
+  lineTotal         Decimal         @db.Decimal(14, 2)
+  purchaseReceipt   PurchaseReceipt @relation(fields: [purchaseReceiptId], references: [id], onDelete: Restrict)
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseReceiptId, productId])
+  @@index([productId])
 }
 
 model AuditLog {
