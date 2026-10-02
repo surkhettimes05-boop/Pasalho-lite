@@ -26,6 +26,34 @@ function normalizeProductInput(input: ProductInput) {
   };
 }
 
+function productAuditSnapshot(product: {
+  sku: string;
+  barcode: string | null;
+  name: string;
+  category: string;
+  unit: string;
+  costPrice: Prisma.Decimal;
+  sellingPrice: Prisma.Decimal;
+  mrp: Prisma.Decimal | null;
+  warehouseMinStock: Prisma.Decimal;
+  storeMinStock: Prisma.Decimal;
+  active: boolean;
+}) {
+  return {
+    sku: product.sku,
+    barcode: product.barcode,
+    name: product.name,
+    category: product.category,
+    unit: product.unit,
+    costPrice: product.costPrice.toString(),
+    sellingPrice: product.sellingPrice.toString(),
+    mrp: product.mrp?.toString() ?? null,
+    warehouseMinStock: product.warehouseMinStock.toString(),
+    storeMinStock: product.storeMinStock.toString(),
+    active: product.active,
+  };
+}
+
 function mapUniqueConstraint(error: unknown): never {
   if (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -52,7 +80,37 @@ export async function createProduct(actor: SessionUser, input: ProductInput) {
   const data = normalizeProductInput(input);
 
   try {
-    return await prisma.product.create({ data });
+    return await prisma.$transaction(async (tx) => {
+      const locations = await tx.location.findMany({
+        where: { active: true },
+        select: { id: true },
+      });
+
+      const created = await tx.product.create({ data });
+
+      if (locations.length > 0) {
+        await tx.stockBalance.createMany({
+          data: locations.map((location) => ({
+            productId: created.id,
+            locationId: location.id,
+            onHand: new Prisma.Decimal(0),
+            reserved: new Prisma.Decimal(0),
+          })),
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.id,
+          action: "PRODUCT_CREATED",
+          entityType: "Product",
+          entityId: created.id,
+          afterData: productAuditSnapshot(created),
+        },
+      });
+
+      return created;
+    });
   } catch (error) {
     return mapUniqueConstraint(error);
   }
@@ -87,32 +145,8 @@ export async function updateProduct(
           action: "PRODUCT_UPDATED",
           entityType: "Product",
           entityId: productId,
-          beforeData: {
-            sku: existing.sku,
-            barcode: existing.barcode,
-            name: existing.name,
-            category: existing.category,
-            unit: existing.unit,
-            costPrice: existing.costPrice.toString(),
-            sellingPrice: existing.sellingPrice.toString(),
-            mrp: existing.mrp?.toString() ?? null,
-            warehouseMinStock: existing.warehouseMinStock.toString(),
-            storeMinStock: existing.storeMinStock.toString(),
-            active: existing.active,
-          },
-          afterData: {
-            sku: updated.sku,
-            barcode: updated.barcode,
-            name: updated.name,
-            category: updated.category,
-            unit: updated.unit,
-            costPrice: updated.costPrice.toString(),
-            sellingPrice: updated.sellingPrice.toString(),
-            mrp: updated.mrp?.toString() ?? null,
-            warehouseMinStock: updated.warehouseMinStock.toString(),
-            storeMinStock: updated.storeMinStock.toString(),
-            active: updated.active,
-          },
+          beforeData: productAuditSnapshot(existing),
+          afterData: productAuditSnapshot(updated),
         },
       });
 

@@ -159,3 +159,19 @@ ALTER TABLE "AuditLog"
 ADD CONSTRAINT "AuditLog_actorUserId_fkey"
 FOREIGN KEY ("actorUserId") REFERENCES "User"("id")
 ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- Enforce append-only movement and audit history at the database layer.
+CREATE OR REPLACE FUNCTION "prevent_append_only_mutation"()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'append-only records cannot be updated or deleted';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "InventoryMovement_append_only"
+BEFORE UPDATE OR DELETE ON "InventoryMovement"
+FOR EACH ROW EXECUTE FUNCTION "prevent_append_only_mutation"();
+
+CREATE TRIGGER "AuditLog_append_only"
+BEFORE UPDATE OR DELETE ON "AuditLog"
+FOR EACH ROW EXECUTE FUNCTION "prevent_append_only_mutation"();
