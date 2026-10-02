@@ -155,24 +155,62 @@ export async function adjustInventory(
   );
 }
 
-export async function getInventoryRows() {
-  const locations = await prisma.location.findMany({
-    where: { active: true },
-    orderBy: [{ type: "asc" }, { name: "asc" }],
-  });
+export async function getInventoryRows({
+  search = "",
+  page = 1,
+  pageSize = 40,
+  locationTypes,
+}: {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  locationTypes?: Array<"WAREHOUSE" | "STORE">;
+} = {}) {
+  const normalizedPage = Math.max(1, page);
+  const normalizedPageSize = Math.min(Math.max(pageSize, 1), 100);
+  const productWhere: Prisma.ProductWhereInput = search
+    ? {
+        OR: [
+          { sku: { contains: search, mode: "insensitive" } },
+          { name: { contains: search, mode: "insensitive" } },
+          { barcode: { contains: search, mode: "insensitive" } },
+        ],
+      }
+    : {};
 
-  const products = await prisma.product.findMany({
-    orderBy: [{ active: "desc" }, { name: "asc" }],
-    include: {
-      stockBalances: {
-        include: {
-          location: true,
+  const locationWhere: Prisma.LocationWhereInput = {
+    active: true,
+    ...(locationTypes?.length
+      ? {
+          type: {
+            in: locationTypes,
+          },
+        }
+      : {}),
+  };
+
+  const [locations, totalProducts, products] = await Promise.all([
+    prisma.location.findMany({
+      where: locationWhere,
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+    }),
+    prisma.product.count({ where: productWhere }),
+    prisma.product.findMany({
+      where: productWhere,
+      orderBy: [{ active: "desc" }, { name: "asc" }],
+      skip: (normalizedPage - 1) * normalizedPageSize,
+      take: normalizedPageSize,
+      include: {
+        stockBalances: {
+          include: {
+            location: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
 
-  return products.flatMap((product) =>
+  const rows = products.flatMap((product) =>
     locations.map((location) => {
       const balance = product.stockBalances.find(
         (item) => item.locationId === location.id,
@@ -199,6 +237,89 @@ export async function getInventoryRows() {
       };
     }),
   );
+
+  return {
+    rows,
+    totalProducts,
+    page: normalizedPage,
+    pageSize: normalizedPageSize,
+    totalPages: Math.max(1, Math.ceil(totalProducts / normalizedPageSize)),
+  };
+}
+
+export async function getMovementPage({
+  search = "",
+  page = 1,
+  pageSize = 50,
+  locationTypes,
+}: {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  locationTypes?: Array<"WAREHOUSE" | "STORE">;
+} = {}) {
+  const normalizedPage = Math.max(1, page);
+  const normalizedPageSize = Math.min(Math.max(pageSize, 1), 100);
+  const where: Prisma.InventoryMovementWhereInput = {
+    ...(search
+      ? {
+          product: {
+            OR: [
+              { sku: { contains: search, mode: "insensitive" } },
+              { name: { contains: search, mode: "insensitive" } },
+            ],
+          },
+        }
+      : {}),
+    ...(locationTypes?.length
+      ? {
+          location: {
+            type: {
+              in: locationTypes,
+            },
+          },
+        }
+      : {}),
+  };
+
+  const [movements, total] = await Promise.all([
+    prisma.inventoryMovement.findMany({
+      where,
+      skip: (normalizedPage - 1) * normalizedPageSize,
+      take: normalizedPageSize,
+      orderBy: { createdAt: "desc" },
+      include: {
+        product: {
+          select: {
+            sku: true,
+            name: true,
+          },
+        },
+        location: {
+          select: {
+            code: true,
+            name: true,
+            type: true,
+          },
+        },
+        actor: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    }),
+    prisma.inventoryMovement.count({ where }),
+  ]);
+
+  return {
+    movements,
+    total,
+    page: normalizedPage,
+    pageSize: normalizedPageSize,
+    totalPages: Math.max(1, Math.ceil(total / normalizedPageSize)),
+  };
 }
 
 export async function getRecentMovements(limit = 100) {

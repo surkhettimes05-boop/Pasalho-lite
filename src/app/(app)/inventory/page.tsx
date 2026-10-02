@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import Link from "next/link";
 import { LocationType, Role } from "@/generated/prisma/client";
 import { adjustInventoryAction } from "@/app/(app)/inventory/actions";
 import { requireCurrentUser } from "@/lib/auth/current-user";
@@ -11,6 +12,7 @@ import {
 const errors: Record<string, string> = {
   INSUFFICIENT_STOCK: "Adjustment would make stock negative.",
   RESERVED_STOCK_CONFLICT: "Adjustment would reduce stock below reserved stock.",
+  IDEMPOTENCY_CONFLICT: "That adjustment request conflicts with an earlier request.",
   PRODUCT_NOT_FOUND: "Product not found.",
   LOCATION_NOT_FOUND: "Location not found.",
   INVALID_ADJUSTMENT: "Check the adjustment fields and try again.",
@@ -18,19 +20,51 @@ const errors: Record<string, string> = {
   ADJUSTMENT_FAILED: "The adjustment could not be completed.",
 };
 
+function pageNumber(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function pageHref(page: number, q: string) {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+
+  if (q) {
+    params.set("q", q);
+  }
+
+  return `/inventory?${params.toString()}`;
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    success?: string;
+    q?: string;
+    page?: string;
+  }>;
 }) {
   const user = await requireCurrentUser();
   const params = await searchParams;
+  const q = params.q?.trim() ?? "";
+  const page = pageNumber(params.page);
+  const locationTypes =
+    user.role === Role.CASHIER_STORE
+      ? [LocationType.STORE]
+      : [LocationType.WAREHOUSE, LocationType.STORE];
 
-  const [allRows, movements, products, locations] = await Promise.all([
-    getInventoryRows(),
-    getRecentMovements(50),
+  const [inventoryPage, movements, products, locations] = await Promise.all([
+    getInventoryRows({
+      search: q,
+      page,
+      pageSize: 40,
+      locationTypes,
+    }),
+    getRecentMovements(20),
     prisma.product.findMany({
       where: { active: true },
       orderBy: { name: "asc" },
@@ -43,11 +77,7 @@ export default async function InventoryPage({
     }),
   ]);
 
-  const rows =
-    user.role === Role.CASHIER_STORE
-      ? allRows.filter((row) => row.locationType === LocationType.STORE)
-      : allRows;
-
+  const rows = inventoryPage.rows;
   const canAdjust = user.role === Role.OWNER_ADMIN;
   const adjustmentKey = randomUUID();
 
@@ -62,7 +92,9 @@ export default async function InventoryPage({
             explained by an immutable movement.
           </p>
         </div>
-        <span className="status-badge">{rows.length} balances</span>
+        <span className="status-badge">
+          {inventoryPage.totalProducts} products
+        </span>
       </header>
 
       {params.error ? (
@@ -170,6 +202,23 @@ export default async function InventoryPage({
           </div>
         </div>
 
+        <form className="search-row" method="get">
+          <input
+            aria-label="Search inventory"
+            defaultValue={q}
+            name="q"
+            placeholder="Search SKU, barcode or product name"
+          />
+          <button className="secondary-light-button" type="submit">
+            Search
+          </button>
+          {q ? (
+            <Link className="text-link" href="/inventory">
+              Clear
+            </Link>
+          ) : null}
+        </form>
+
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -188,7 +237,7 @@ export default async function InventoryPage({
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="empty-cell">
-                    Add products to start tracking inventory.
+                    No matching inventory.
                   </td>
                 </tr>
               ) : (
@@ -227,6 +276,32 @@ export default async function InventoryPage({
             </tbody>
           </table>
         </div>
+
+        <div className="pagination">
+          <span>
+            Product page {inventoryPage.page} of {inventoryPage.totalPages} ·{" "}
+            {inventoryPage.totalProducts} result
+            {inventoryPage.totalProducts === 1 ? "" : "s"}
+          </span>
+          <div>
+            {inventoryPage.page > 1 ? (
+              <Link
+                className="text-link"
+                href={pageHref(inventoryPage.page - 1, q)}
+              >
+                Previous
+              </Link>
+            ) : null}
+            {inventoryPage.page < inventoryPage.totalPages ? (
+              <Link
+                className="text-link"
+                href={pageHref(inventoryPage.page + 1, q)}
+              >
+                Next
+              </Link>
+            ) : null}
+          </div>
+        </div>
       </section>
 
       <section className="panel">
@@ -235,6 +310,9 @@ export default async function InventoryPage({
             <p className="eyebrow">Ledger</p>
             <h3>Recent inventory movements</h3>
           </div>
+          <Link className="text-link" href="/inventory/movements">
+            Full history
+          </Link>
         </div>
 
         <div className="table-wrap">

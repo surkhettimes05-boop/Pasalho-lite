@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { Role } from "@/generated/prisma/client";
+import { Prisma, Role } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { requirePageRole } from "@/lib/auth/require-role";
 import {
   createProductAction,
   setProductActiveAction,
 } from "@/app/(app)/products/actions";
+
+const PAGE_SIZE = 50;
 
 const messages: Record<string, string> = {
   SKU_EXISTS: "That SKU already exists.",
@@ -14,19 +16,60 @@ const messages: Record<string, string> = {
   PRODUCT_OPERATION_FAILED: "The product operation could not be completed.",
 };
 
+function pageNumber(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function pageHref(page: number, q: string) {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+
+  if (q) {
+    params.set("q", q);
+  }
+
+  return `/products?${params.toString()}`;
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    success?: string;
+    q?: string;
+    page?: string;
+  }>;
 }) {
   await requirePageRole([Role.OWNER_ADMIN]);
   const params = await searchParams;
+  const q = params.q?.trim() ?? "";
+  const page = pageNumber(params.page);
 
-  const products = await prisma.product.findMany({
-    orderBy: [{ active: "desc" }, { name: "asc" }],
-  });
+  const where: Prisma.ProductWhereInput = q
+    ? {
+        OR: [
+          { sku: { contains: q, mode: "insensitive" } },
+          { name: { contains: q, mode: "insensitive" } },
+          { barcode: { contains: q, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      orderBy: [{ active: "desc" }, { name: "asc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+    prisma.product.count({ where }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="page-stack">
@@ -39,7 +82,7 @@ export default async function ProductsPage({
             ledger-backed inventory operations.
           </p>
         </div>
-        <span className="status-badge">{products.length} SKUs</span>
+        <span className="status-badge">{total} SKUs</span>
       </header>
 
       {params.error ? (
@@ -139,6 +182,23 @@ export default async function ProductsPage({
           </div>
         </div>
 
+        <form className="search-row" method="get">
+          <input
+            aria-label="Search products"
+            defaultValue={q}
+            name="q"
+            placeholder="Search SKU, barcode or product name"
+          />
+          <button className="secondary-light-button" type="submit">
+            Search
+          </button>
+          {q ? (
+            <Link className="text-link" href="/products">
+              Clear
+            </Link>
+          ) : null}
+        </form>
+
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -157,7 +217,7 @@ export default async function ProductsPage({
               {products.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="empty-cell">
-                    No products yet.
+                    No matching products.
                   </td>
                 </tr>
               ) : (
@@ -213,6 +273,24 @@ export default async function ProductsPage({
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="pagination">
+          <span>
+            Page {page} of {totalPages} · {total} result{total === 1 ? "" : "s"}
+          </span>
+          <div>
+            {page > 1 ? (
+              <Link className="text-link" href={pageHref(page - 1, q)}>
+                Previous
+              </Link>
+            ) : null}
+            {page < totalPages ? (
+              <Link className="text-link" href={pageHref(page + 1, q)}>
+                Next
+              </Link>
+            ) : null}
+          </div>
         </div>
       </section>
     </div>
