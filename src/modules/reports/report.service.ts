@@ -21,7 +21,7 @@ import { getDailyClosePreview } from "@/modules/daily-close/daily-close.service"
 const ZERO = new Prisma.Decimal(0);
 
 function sumDecimals<T>(
-  rows: T[],
+  rows: readonly T[],
   value: (row: T) => Prisma.Decimal,
 ) {
   return rows.reduce((sum, row) => sum.add(value(row)), new Prisma.Decimal(0));
