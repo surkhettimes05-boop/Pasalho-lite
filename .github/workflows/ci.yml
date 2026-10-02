@@ -98,6 +98,16 @@ jobs:
             "SELECT COUNT(*) FROM \"User\" WHERE role='OWNER_ADMIN' AND active=true;" \
             | grep -qx '1'
 
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d pasalho_bootstrap -tAc \
+            "SELECT COUNT(*) FROM \"Location\" WHERE code='WAREHOUSE_MAIN' AND type='WAREHOUSE' AND active=true;" \
+            | grep -qx '1'
+
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d pasalho_bootstrap -tAc \
+            "SELECT COUNT(*) FROM \"Location\" WHERE code='STORE_MAIN' AND type='STORE' AND active=true;" \
+            | grep -qx '1'
+
           if APP_ENV=production \
             BOOTSTRAP_OWNER_EMAIL='second@ci.pasalho.test' \
             BOOTSTRAP_OWNER_PASSWORD='another-bootstrap-password-strong' \
