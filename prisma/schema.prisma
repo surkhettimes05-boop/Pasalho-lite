@@ -35,19 +35,30 @@ enum PurchaseReceiptStatus {
   REVERSED
 }
 
+enum TransferStatus {
+  DRAFT
+  READY
+  DISPATCHED
+  RECEIVED
+  CANCELLED
+}
+
 model User {
-  id                 String              @id @default(uuid())
-  name               String
-  email              String              @unique
-  passwordHash       String
-  role               Role
-  active             Boolean             @default(true)
-  sessions           Session[]
-  inventoryMovements InventoryMovement[]
-  purchaseReceipts   PurchaseReceipt[]
-  auditLogs          AuditLog[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                  String              @id @default(uuid())
+  name                String
+  email               String              @unique
+  passwordHash        String
+  role                Role
+  active              Boolean             @default(true)
+  sessions            Session[]
+  inventoryMovements  InventoryMovement[]
+  purchaseReceipts    PurchaseReceipt[]
+  transfersCreated    Transfer[]          @relation("TransferCreatedBy")
+  transfersDispatched Transfer[]          @relation("TransferDispatchedBy")
+  transfersReceived   Transfer[]          @relation("TransferReceivedBy")
+  auditLogs           AuditLog[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   @@index([role])
 }
@@ -72,6 +83,8 @@ model Location {
   active             Boolean             @default(true)
   stockBalances      StockBalance[]
   inventoryMovements InventoryMovement[]
+  transfersFrom      Transfer[]          @relation("TransferFromLocation")
+  transfersTo        Transfer[]          @relation("TransferToLocation")
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -94,6 +107,7 @@ model Product {
   stockBalances        StockBalance[]
   inventoryMovements   InventoryMovement[]
   purchaseReceiptItems PurchaseReceiptItem[]
+  transferItems        TransferItem[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -182,6 +196,49 @@ model PurchaseReceiptItem {
   product           Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@unique([purchaseReceiptId, productId])
+  @@index([productId])
+}
+
+model Transfer {
+  id                     String         @id @default(uuid())
+  transferNumber         String         @unique
+  fromLocationId         String
+  toLocationId           String
+  status                 TransferStatus @default(DRAFT)
+  dispatchedAt           DateTime?
+  receivedAt             DateTime?
+  createdByUserId        String
+  dispatchedByUserId     String?
+  receivedByUserId       String?
+  notes                  String?
+  dispatchIdempotencyKey String?        @unique
+  receiveIdempotencyKey  String?        @unique
+  fromLocation           Location       @relation("TransferFromLocation", fields: [fromLocationId], references: [id], onDelete: Restrict)
+  toLocation             Location       @relation("TransferToLocation", fields: [toLocationId], references: [id], onDelete: Restrict)
+  createdBy              User           @relation("TransferCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  dispatchedBy           User?          @relation("TransferDispatchedBy", fields: [dispatchedByUserId], references: [id], onDelete: Restrict)
+  receivedBy             User?          @relation("TransferReceivedBy", fields: [receivedByUserId], references: [id], onDelete: Restrict)
+  items                  TransferItem[]
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  @@index([status, createdAt])
+  @@index([fromLocationId, createdAt])
+  @@index([toLocationId, createdAt])
+}
+
+model TransferItem {
+  id                  String   @id @default(uuid())
+  transferId          String
+  productId           String
+  requestedQuantity   Decimal  @db.Decimal(14, 3)
+  dispatchedQuantity  Decimal? @db.Decimal(14, 3)
+  receivedQuantity    Decimal? @db.Decimal(14, 3)
+  discrepancyReason   String?
+  transfer            Transfer @relation(fields: [transferId], references: [id], onDelete: Restrict)
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([transferId, productId])
   @@index([productId])
 }
 

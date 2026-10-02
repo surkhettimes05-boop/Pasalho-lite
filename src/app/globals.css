@@ -679,3 +679,130 @@ p {
     flex-direction: column;
   }
 }
+
+.transfer-create-line {
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(300px, 2fr) minmax(150px, 0.8fr) auto;
+  padding: 1rem 0;
+}
+
+.transfer-create-line > label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  font-weight: 700;
+  gap: 0.4rem;
+}
+
+.transfer-create-line > label input {
+  background: #fff;
+  border: 1px solid #cbd5cd;
+  border-radius: 0.65rem;
+  color: var(--text);
+  min-height: 42px;
+  outline: none;
+  padding: 0.7rem 0.8rem;
+}
+
+.transfer-meta {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.transfer-meta div {
+  background: var(--surface-soft);
+  border-radius: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.9rem;
+}
+
+.transfer-meta span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.transfer-actions-panel {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.transfer-actions-panel p:last-child {
+  margin-bottom: 0;
+}
+
+.transfer-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.table-input {
+  background: #fff;
+  border: 1px solid #cbd5cd;
+  border-radius: 0.5rem;
+  min-height: 38px;
+  min-width: 110px;
+  padding: 0.55rem 0.65rem;
+  width: 100%;
+}
+
+.receive-transfer-table {
+  min-width: 900px;
+}
+
+.transfer-status-cancelled {
+  background: #ecefed;
+  border-color: #d9dfdb;
+  color: #5e6861;
+}
+
+.transfer-status-dispatched {
+  background: #fff4d8;
+  border-color: #f0d596;
+  color: #805d08;
+}
+
+.transfer-status-received {
+  background: #e2f4e8;
+  border-color: #c3e3cd;
+  color: var(--brand-dark);
+}
+
+@media (max-width: 900px) {
+  .transfer-create-line {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .transfer-create-line .receipt-product-field {
+    grid-column: span 2;
+  }
+
+  .transfer-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .transfer-actions-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 620px) {
+  .transfer-create-line,
+  .transfer-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .transfer-create-line .receipt-product-field {
+    grid-column: span 1;
+  }
+}
