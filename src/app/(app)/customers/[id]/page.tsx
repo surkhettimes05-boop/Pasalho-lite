@@ -23,11 +23,6 @@ export default async function CustomerDetailPage({
     notFound();
   }
 
-  const eligibleSpend = customer.loyaltyTransactions.reduce(
-    (sum, transaction) => sum + Number(transaction.eligibleSpendDelta),
-    0,
-  );
-
   return (
     <div className="page-stack">
       <header className="page-header">
@@ -64,7 +59,7 @@ export default async function CustomerDetailPage({
         </article>
         <article className="summary-card">
           <span>Net eligible spend</span>
-          <strong>Rs {eligibleSpend.toFixed(2)}</strong>
+          <strong>Rs {customer.loyaltyEligibleSpendTotal.toFixed(2)}</strong>
           <small>Sum of loyalty ledger spend deltas</small>
         </article>
       </section>
@@ -119,7 +114,7 @@ export default async function CustomerDetailPage({
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Loyalty ledger</p>
-            <h3>Transactions</h3>
+            <h3>Recent transactions</h3>
           </div>
         </div>
 
