@@ -15,7 +15,10 @@ import { assertRole } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
-import { recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
+import {
+  changeInventoryReserved,
+  recordPhysicalInventoryMovement,
+} from "@/modules/inventory/inventory.service";
 import { applyEligibleSpend } from "@/modules/loyalty/loyalty.service";
 import {
   createCustomerOrderInputSchema,
@@ -365,22 +368,10 @@ export async function confirmCustomerOrder(
             },
           });
 
-          await tx.stockBalance.upsert({
-            where: {
-              productId_locationId: {
-                productId: item.productId,
-                locationId: order.storeLocationId,
-              },
-            },
-            create: {
-              productId: item.productId,
-              locationId: order.storeLocationId,
-              onHand,
-              reserved: item.quantity,
-            },
-            update: {
-              reserved: reserved.add(item.quantity),
-            },
+          await changeInventoryReserved(tx, {
+            productId: item.productId,
+            locationId: order.storeLocationId,
+            quantityDelta: item.quantity,
           });
         }
 
@@ -566,16 +557,10 @@ export async function dispatchCustomerOrder(
             );
           }
 
-          await tx.stockBalance.update({
-            where: {
-              productId_locationId: {
-                productId: item.productId,
-                locationId: order.storeLocationId,
-              },
-            },
-            data: {
-              reserved: balance.reserved.sub(item.quantity),
-            },
+          await changeInventoryReserved(tx, {
+            productId: item.productId,
+            locationId: order.storeLocationId,
+            quantityDelta: item.quantity.negated(),
           });
 
           await recordPhysicalInventoryMovement(tx, {
@@ -807,16 +792,10 @@ export async function cancelCustomerOrder(
             );
           }
 
-          await tx.stockBalance.update({
-            where: {
-              productId_locationId: {
-                productId: reservation.productId,
-                locationId: reservation.locationId,
-              },
-            },
-            data: {
-              reserved: balance.reserved.sub(reservation.quantity),
-            },
+          await changeInventoryReserved(tx, {
+            productId: reservation.productId,
+            locationId: reservation.locationId,
+            quantityDelta: reservation.quantity.negated(),
           });
 
           await tx.inventoryReservation.update({
