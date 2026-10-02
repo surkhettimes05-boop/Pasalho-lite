@@ -34,7 +34,7 @@ describe("Phase 8 cash movement ledger", () => {
     const key = `p8-ledger-opening-${suffix}`;
     const input = {
       operatingDate,
-      type: CashMovementType.OPENING_CASH as const,
+      type: CashMovementType.OPENING_CASH,
       effect: null,
       amount: "3000.00",
       category: "OPENING_DRAWER",
