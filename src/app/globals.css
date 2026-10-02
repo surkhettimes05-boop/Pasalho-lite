@@ -1171,3 +1171,82 @@ p {
     flex-direction: column;
   }
 }
+
+.order-customer-section {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.9rem;
+}
+
+.order-meta {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 1rem;
+}
+
+.order-meta div {
+  background: var(--surface-soft);
+  border-radius: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+}
+
+.order-meta span,
+.order-totals span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.order-totals {
+  margin-left: auto;
+  margin-top: 1rem;
+  max-width: 360px;
+}
+
+.order-totals > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.32rem 0;
+}
+
+.order-status-confirmed,
+.order-status-packed {
+  background: #eef4ff;
+  border-color: #cad8f1;
+  color: #365789;
+}
+
+.order-status-dispatched {
+  background: #fff4d8;
+  border-color: #f0d596;
+  color: #805d08;
+}
+
+.order-status-delivered {
+  background: #e2f4e8;
+  border-color: #c3e3cd;
+  color: var(--brand-dark);
+}
+
+.order-status-cancelled {
+  background: #ecefed;
+  border-color: #d9dfdb;
+  color: #5e6861;
+}
+
+@media (max-width: 900px) {
+  .order-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .order-meta {
+    grid-template-columns: 1fr;
+  }
+}
