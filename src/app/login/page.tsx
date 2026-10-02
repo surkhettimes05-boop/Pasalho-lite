@@ -17,6 +17,7 @@ export default async function LoginPage({
 
   const params = await searchParams;
   const invalid = params.error === "invalid";
+  const rateLimited = params.error === "rate_limited";
 
   return (
     <main className="login-page">
@@ -32,6 +33,11 @@ export default async function LoginPage({
         {invalid ? (
           <p className="error-message" role="alert">
             Email or password is incorrect.
+          </p>
+        ) : null}
+        {rateLimited ? (
+          <p className="error-message" role="alert">
+            Too many failed sign-in attempts. Try again after the security window.
           </p>
         ) : null}
 

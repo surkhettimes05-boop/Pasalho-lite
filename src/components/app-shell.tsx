@@ -4,10 +4,6 @@ import { Role } from "@/generated/prisma/client";
 import { logoutAction } from "@/app/(app)/actions";
 import type { SessionUser } from "@/lib/auth/session";
 
-const plannedModules = [
-  "Users / Audit",
-];
-
 export function AppShell({
   user,
   children,
@@ -69,12 +65,11 @@ export function AppShell({
           <Link className="nav-item" href="/reports">
             Reports
           </Link>
-          {plannedModules.map((module) => (
-            <span className="nav-item nav-item-disabled" key={module}>
-              {module}
-              <small>Planned</small>
-            </span>
-          ))}
+          {user.role === Role.OWNER_ADMIN ? (
+            <Link className="nav-item" href="/users-audit">
+              Users / Audit
+            </Link>
+          ) : null}
         </nav>
 
         <div className="sidebar-user">

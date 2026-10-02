@@ -3,7 +3,10 @@ import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import type { Role } from "@/generated/prisma/client";
 
-export const SESSION_COOKIE_NAME = "pasalho_session";
+export const SESSION_COOKIE_NAME =
+  env.APP_ENV === "production"
+    ? "__Host-pasalho_session"
+    : "pasalho_session";
 
 export type SessionUser = {
   id: string;

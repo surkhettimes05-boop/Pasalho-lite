@@ -30,6 +30,7 @@ jobs:
           --health-retries 5
 
     env:
+      APP_ENV: test
       DATABASE_URL: postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_lite?schema=public
       AUTH_SECRET: phase-zero-ci-auth-secret-that-is-longer-than-thirty-two-characters
       APP_URL: http://127.0.0.1:3000
@@ -50,6 +51,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Dependency high-severity audit
+        run: npm audit --audit-level=high
+
+      - name: Record non-critical dependency findings
+        run: npm audit --omit=dev || true
+
       - name: Validate Prisma schema
         run: npm run prisma:validate
 
@@ -59,6 +66,57 @@ jobs:
       - name: Seed Phase 0 operating data
         run: npm run db:seed
 
+      - name: Verify production seed is blocked
+        shell: bash
+        run: |
+          if APP_ENV=production npm run db:seed; then
+            echo "Production seed unexpectedly succeeded."
+            exit 1
+          fi
+
+      - name: Prove controlled production Owner/Admin bootstrap
+        shell: bash
+        run: |
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d postgres \
+            -c 'DROP DATABASE IF EXISTS pasalho_bootstrap WITH (FORCE);'
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d postgres \
+            -c 'CREATE DATABASE pasalho_bootstrap;'
+
+          export DATABASE_URL='postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_bootstrap?schema=public'
+          npm run db:migrate:deploy
+
+          APP_ENV=production \
+          BOOTSTRAP_OWNER_EMAIL='bootstrap@ci.pasalho.test' \
+          BOOTSTRAP_OWNER_PASSWORD='ci-bootstrap-owner-password-strong' \
+          BOOTSTRAP_OWNER_NAME='CI Bootstrap Owner' \
+            npm run admin:bootstrap-owner
+
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d pasalho_bootstrap -tAc \
+            "SELECT COUNT(*) FROM \"User\" WHERE role='OWNER_ADMIN' AND active=true;" \
+            | grep -qx '1'
+
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d pasalho_bootstrap -tAc \
+            "SELECT COUNT(*) FROM \"Location\" WHERE code='WAREHOUSE_MAIN' AND type='WAREHOUSE' AND active=true;" \
+            | grep -qx '1'
+
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d pasalho_bootstrap -tAc \
+            "SELECT COUNT(*) FROM \"Location\" WHERE code='STORE_MAIN' AND type='STORE' AND active=true;" \
+            | grep -qx '1'
+
+          if APP_ENV=production \
+            BOOTSTRAP_OWNER_EMAIL='second@ci.pasalho.test' \
+            BOOTSTRAP_OWNER_PASSWORD='another-bootstrap-password-strong' \
+            BOOTSTRAP_OWNER_NAME='Second Owner' \
+            npm run admin:bootstrap-owner; then
+            echo "Second bootstrap unexpectedly succeeded."
+            exit 1
+          fi
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -67,6 +125,47 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Prove backup and restore
+        shell: bash
+        run: |
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            pg_dump -h 127.0.0.1 -U pasalho -d pasalho_lite \
+            --format=custom --no-owner --no-privileges > /tmp/pasalho.dump
+          test -s /tmp/pasalho.dump
+
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d postgres \
+            -c 'DROP DATABASE IF EXISTS pasalho_restore WITH (FORCE);'
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d postgres \
+            -c 'CREATE DATABASE pasalho_restore;'
+          cat /tmp/pasalho.dump | docker run --rm --network host -i \
+            -e PGPASSWORD=pasalho postgres:17-alpine \
+            pg_restore -h 127.0.0.1 -U pasalho -d pasalho_restore \
+            --no-owner --no-privileges
+
+          SOURCE_DATABASE_URL='postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_lite?schema=public' \
+          RESTORE_DATABASE_URL='postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_restore?schema=public' \
+            npm run db:verify-restore
+
+          DATABASE_URL='postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_restore?schema=public' \
+            npm run db:migrate:deploy
+
+      - name: Canonical end-to-end release test
+        shell: bash
+        run: |
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d postgres \
+            -c 'DROP DATABASE IF EXISTS pasalho_e2e WITH (FORCE);'
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+            psql -h 127.0.0.1 -U pasalho -d postgres \
+            -c 'CREATE DATABASE pasalho_e2e;'
+
+          export DATABASE_URL='postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_e2e?schema=public'
+          npm run db:migrate:deploy
+          npm run db:seed
+          npm run release:e2e
 
       - name: Production build
         run: npm run build
@@ -81,6 +180,8 @@ jobs:
           for attempt in {1..30}; do
             if curl --fail --silent --show-error http://127.0.0.1:3000/api/health > /tmp/health.json; then
               cat /tmp/health.json
+              curl --fail --silent --show-error http://127.0.0.1:3000/api/ready > /tmp/ready.json
+              cat /tmp/ready.json
               exit 0
             fi
             sleep 1
