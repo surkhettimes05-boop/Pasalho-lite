@@ -30,7 +30,7 @@ import {
 } from "@/modules/reports/report.service";
 
 const suffix = randomUUID().slice(0, 8);
-const dateKey = "2024-06-14";
+const dateKey = "2026-09-20";
 
 let owner: SessionUser;
 let warehouseId: string;
