@@ -438,11 +438,9 @@ export async function packCustomerOrder(
 
         if (
           order.packIdempotencyKey === parsed.idempotencyKey &&
-          [
-            CustomerOrderStatus.PACKED,
-            CustomerOrderStatus.DISPATCHED,
-            CustomerOrderStatus.DELIVERED,
-          ].includes(order.status)
+          (order.status === CustomerOrderStatus.PACKED ||
+            order.status === CustomerOrderStatus.DISPATCHED ||
+            order.status === CustomerOrderStatus.DELIVERED)
         ) {
           return order;
         }
@@ -516,9 +514,8 @@ export async function dispatchCustomerOrder(
 
         if (
           order.dispatchIdempotencyKey === parsed.idempotencyKey &&
-          [CustomerOrderStatus.DISPATCHED, CustomerOrderStatus.DELIVERED].includes(
-            order.status,
-          )
+          (order.status === CustomerOrderStatus.DISPATCHED ||
+            order.status === CustomerOrderStatus.DELIVERED)
         ) {
           return order;
         }
@@ -775,11 +772,11 @@ export async function cancelCustomerOrder(
         }
 
         if (
-          ![
-            CustomerOrderStatus.NEW,
-            CustomerOrderStatus.CONFIRMED,
-            CustomerOrderStatus.PACKED,
-          ].includes(order.status)
+          !(
+            order.status === CustomerOrderStatus.NEW ||
+            order.status === CustomerOrderStatus.CONFIRMED ||
+            order.status === CustomerOrderStatus.PACKED
+          )
         ) {
           throw new BusinessError(
             "INVALID_STATE_TRANSITION",
