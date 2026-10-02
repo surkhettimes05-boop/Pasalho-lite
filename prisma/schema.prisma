@@ -43,6 +43,30 @@ enum TransferStatus {
   CANCELLED
 }
 
+enum SaleStatus {
+  FINALIZED
+  PARTIALLY_RETURNED
+  RETURNED
+}
+
+enum PaymentSourceType {
+  SALE
+  CUSTOMER_ORDER
+}
+
+enum PaymentMethod {
+  CASH
+  QR_NON_CASH
+  COD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
 model User {
   id                  String              @id @default(uuid())
   name                String
@@ -56,6 +80,8 @@ model User {
   transfersCreated    Transfer[]          @relation("TransferCreatedBy")
   transfersDispatched Transfer[]          @relation("TransferDispatchedBy")
   transfersReceived   Transfer[]          @relation("TransferReceivedBy")
+  salesFinalized      Sale[]              @relation("SaleFinalizedBy")
+  paymentsRecorded    Payment[]           @relation("PaymentRecordedBy")
   auditLogs           AuditLog[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
@@ -85,6 +111,7 @@ model Location {
   inventoryMovements InventoryMovement[]
   transfersFrom      Transfer[]          @relation("TransferFromLocation")
   transfersTo        Transfer[]          @relation("TransferToLocation")
+  sales              Sale[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -108,6 +135,7 @@ model Product {
   inventoryMovements   InventoryMovement[]
   purchaseReceiptItems PurchaseReceiptItem[]
   transferItems        TransferItem[]
+  saleItems            SaleItem[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -240,6 +268,69 @@ model TransferItem {
 
   @@unique([transferId, productId])
   @@index([productId])
+}
+
+model Sale {
+  id                String        @id @default(uuid())
+  receiptNumber     String        @unique
+  storeLocationId   String
+  customerId        String?
+  status            SaleStatus    @default(FINALIZED)
+  subtotal          Decimal       @db.Decimal(14, 2)
+  discountTotal     Decimal       @default(0) @db.Decimal(14, 2)
+  total             Decimal       @db.Decimal(14, 2)
+  paymentStatus     PaymentStatus @default(PAID)
+  finalizedAt       DateTime
+  finalizedByUserId String
+  idempotencyKey    String        @unique
+  storeLocation     Location      @relation(fields: [storeLocationId], references: [id], onDelete: Restrict)
+  finalizedBy       User          @relation("SaleFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: Restrict)
+  items             SaleItem[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([storeLocationId, finalizedAt])
+  @@index([finalizedByUserId, finalizedAt])
+  @@index([customerId, finalizedAt])
+}
+
+model SaleItem {
+  id                  String   @id @default(uuid())
+  saleId              String
+  productId           String
+  skuSnapshot         String
+  productNameSnapshot String
+  quantity            Decimal  @db.Decimal(14, 3)
+  unitPrice           Decimal  @db.Decimal(12, 2)
+  discountAmount      Decimal  @default(0) @db.Decimal(14, 2)
+  lineTotal           Decimal  @db.Decimal(14, 2)
+  unitCostSnapshot    Decimal? @db.Decimal(12, 2)
+  sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([saleId, productId])
+  @@index([productId])
+}
+
+model Payment {
+  id               String            @id @default(uuid())
+  sourceType       PaymentSourceType
+  sourceId         String
+  method           PaymentMethod
+  status           PaymentStatus
+  amount           Decimal           @db.Decimal(14, 2)
+  collectedAt      DateTime?
+  refundedAmount   Decimal           @default(0) @db.Decimal(14, 2)
+  idempotencyKey   String            @unique
+  recordedByUserId String
+  recordedBy       User              @relation("PaymentRecordedBy", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@unique([sourceType, sourceId])
+  @@index([status, createdAt])
+  @@index([method, createdAt])
+  @@index([recordedByUserId, createdAt])
 }
 
 model AuditLog {
