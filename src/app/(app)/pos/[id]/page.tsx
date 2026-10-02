@@ -34,6 +34,12 @@ export default async function PosReceiptPage({
           <h2>{sale.receiptNumber}</h2>
         </div>
         <div className="receipt-actions">
+          <Link
+            className="text-link"
+            href={`/returns/new?sourceType=SALE&sourceId=${sale.id}`}
+          >
+            Process return
+          </Link>
           <Link className="text-link" href="/pos">
             New sale
           </Link>
