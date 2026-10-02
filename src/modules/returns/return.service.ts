@@ -2,6 +2,7 @@ import {
   CustomerOrderStatus,
   InventoryMovementType,
   LoyaltySourceType,
+  PaymentMethod,
   PaymentSourceType,
   PaymentStatus,
   Prisma,
@@ -15,6 +16,8 @@ import { assertRole } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
+import { getNepalOperatingDateKey } from "@/lib/time";
+import { recordSystemRefundCashMovement } from "@/modules/cash/cash.service";
 import { recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
 import { applyEligibleSpendReversal } from "@/modules/loyalty/loyalty.service";
 import {
@@ -592,6 +595,21 @@ export async function processReturn(
                 status: nextPaymentStatus,
               },
             });
+
+            if (
+              payment.method === PaymentMethod.CASH ||
+              payment.method === PaymentMethod.COD
+            ) {
+              await recordSystemRefundCashMovement(tx, {
+                storeLocationId: source.storeLocationId,
+                operatingDateKey: getNepalOperatingDateKey(now),
+                amount: refundTotal,
+                reason: `Refund ${record.returnNumber} for ${source.reference}`,
+                referenceId: record.id,
+                idempotencyKey: `refund-out:${record.id}`,
+                actorUserId: actor.id,
+              });
+            }
 
             if (source.sourceType === ReturnSourceType.SALE) {
               const allReturned = source.lines.every((line) => {
