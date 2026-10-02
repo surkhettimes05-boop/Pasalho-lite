@@ -104,7 +104,7 @@ function sameFinalizeCommand(
 ) {
   if (
     existing.payment?.method !== parsed.paymentMethod ||
-    existing.sale.customerId !== parsed.customerId
+    existing.sale.customerId !== (parsed.customerId ?? null)
   ) {
     return false;
   }
@@ -149,7 +149,11 @@ async function returnReplayOrConflict(parsed: FinalizeSaleInput) {
     );
   }
 
-  return existing;
+  return {
+    sale: existing.sale,
+    payment: existing.payment,
+    loyaltyTransaction: existing.loyaltyTransaction,
+  };
 }
 
 async function finalizeSaleTransaction(
@@ -272,7 +276,7 @@ async function finalizeSaleTransaction(
         data: {
           receiptNumber: buildReceiptNumber(now),
           storeLocationId: store.id,
-          customerId: parsed.customerId,
+          customerId: parsed.customerId ?? null,
           status: SaleStatus.FINALIZED,
           subtotal,
           discountTotal,
