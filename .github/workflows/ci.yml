@@ -90,10 +90,10 @@ jobs:
           BOOTSTRAP_OWNER_NAME='CI Bootstrap Owner' \
             npm run admin:bootstrap-owner
 
-          OWNER_COUNT="$(docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
+          docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
             psql -h 127.0.0.1 -U pasalho -d pasalho_bootstrap -tAc \
-            \"SELECT COUNT(*) FROM \\\"User\\\" WHERE role='OWNER_ADMIN' AND active=true;\")"
-          test "$OWNER_COUNT" = "1"
+            "SELECT COUNT(*) FROM \"User\" WHERE role='OWNER_ADMIN' AND active=true;" \
+            | grep -qx '1'
 
           if APP_ENV=production \
             BOOTSTRAP_OWNER_EMAIL='second@ci.pasalho.test' \
