@@ -1107,3 +1107,67 @@ p {
     padding: 0;
   }
 }
+
+.pos-customer-box {
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  margin: 0.8rem 0 1rem;
+  padding: 0.9rem;
+}
+
+.customer-lookup-row,
+.customer-create-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.customer-lookup-row input,
+.customer-create-row input {
+  background: #fff;
+  border: 1px solid #cbd5cd;
+  border-radius: 0.6rem;
+  flex: 1;
+  min-height: 40px;
+  padding: 0.6rem 0.7rem;
+}
+
+.customer-selected-card {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+}
+
+.customer-selected-card div {
+  display: flex;
+  flex-direction: column;
+}
+
+.customer-selected-card small,
+.customer-message {
+  color: var(--muted);
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.receipt-loyalty-note {
+  background: var(--surface-soft);
+  border-radius: 0.6rem;
+  font-size: 0.82rem;
+  margin: 1rem 0 0;
+  padding: 0.7rem;
+  text-align: center;
+}
+
+@media (max-width: 650px) {
+  .customer-lookup-row,
+  .customer-create-row,
+  .customer-selected-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
