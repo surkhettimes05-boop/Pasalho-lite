@@ -18,16 +18,29 @@ enum LocationType {
   STORE
 }
 
+enum InventoryMovementType {
+  PURCHASE_RECEIPT
+  TRANSFER_OUT
+  TRANSFER_IN
+  POS_SALE
+  COD_DISPATCH
+  RETURN_IN
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+}
+
 model User {
-  id           String    @id @default(uuid())
-  name         String
-  email        String    @unique
-  passwordHash String
-  role         Role
-  active       Boolean   @default(true)
-  sessions     Session[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                 String              @id @default(uuid())
+  name               String
+  email              String              @unique
+  passwordHash       String
+  role               Role
+  active             Boolean             @default(true)
+  sessions           Session[]
+  inventoryMovements InventoryMovement[]
+  auditLogs          AuditLog[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([role])
 }
@@ -45,13 +58,89 @@ model Session {
 }
 
 model Location {
-  id        String       @id @default(uuid())
-  code      String       @unique
-  name      String
-  type      LocationType
-  active    Boolean      @default(true)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id                 String              @id @default(uuid())
+  code               String              @unique
+  name               String
+  type               LocationType
+  active             Boolean             @default(true)
+  stockBalances      StockBalance[]
+  inventoryMovements InventoryMovement[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([type, active])
+}
+
+model Product {
+  id                String              @id @default(uuid())
+  sku               String              @unique
+  barcode           String?             @unique
+  name              String
+  category          String
+  unit              String
+  costPrice         Decimal             @db.Decimal(12, 2)
+  sellingPrice      Decimal             @db.Decimal(12, 2)
+  mrp               Decimal?            @db.Decimal(12, 2)
+  warehouseMinStock Decimal             @default(0) @db.Decimal(14, 3)
+  storeMinStock     Decimal             @default(0) @db.Decimal(14, 3)
+  active            Boolean             @default(true)
+  stockBalances     StockBalance[]
+  inventoryMovements InventoryMovement[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([name])
+  @@index([category])
+  @@index([active])
+}
+
+model StockBalance {
+  id         String   @id @default(uuid())
+  productId  String
+  locationId String
+  onHand     Decimal  @default(0) @db.Decimal(14, 3)
+  reserved   Decimal  @default(0) @db.Decimal(14, 3)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([productId, locationId])
+  @@index([locationId])
+}
+
+model InventoryMovement {
+  id             String                @id @default(uuid())
+  productId      String
+  locationId     String
+  type           InventoryMovementType
+  quantityDelta  Decimal               @db.Decimal(14, 3)
+  referenceType  String
+  referenceId    String
+  idempotencyKey String                @unique
+  reason         String?
+  actorUserId    String
+  product        Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  location       Location              @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  actor          User                  @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  createdAt      DateTime              @default(now())
+
+  @@index([productId, locationId, createdAt])
+  @@index([referenceType, referenceId])
+  @@index([actorUserId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String
+  beforeData  Json?
+  afterData   Json?
+  metadata    Json?
+  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId])
 }
