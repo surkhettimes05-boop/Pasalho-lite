@@ -98,6 +98,20 @@ enum ReservationSourceType {
   CUSTOMER_ORDER
 }
 
+enum ReturnSourceType {
+  SALE
+  CUSTOMER_ORDER
+}
+
+enum ReturnKind {
+  REFUND
+  RECOVERY
+}
+
+enum ReturnStatus {
+  COMPLETED
+}
+
 model User {
   id                  String               @id @default(uuid())
   name                String
@@ -115,6 +129,7 @@ model User {
   paymentsRecorded    Payment[]            @relation("PaymentRecordedBy")
   loyaltyTransactions LoyaltyTransaction[]
   customerOrdersCreated CustomerOrder[] @relation("CustomerOrderCreatedBy")
+  returnsCreated       ReturnRecord[]
   auditLogs           AuditLog[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -173,6 +188,7 @@ model Product {
   saleItems            SaleItem[]
   customerOrderItems   CustomerOrderItem[]
   reservations         InventoryReservation[]
+  returnItems          ReturnItem[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -472,6 +488,45 @@ model InventoryReservation {
   @@unique([sourceType, sourceId, productId])
   @@index([productId, locationId, status])
   @@index([sourceType, sourceId])
+}
+
+model ReturnRecord {
+  id                String           @id @default(uuid())
+  returnNumber      String           @unique
+  sourceType        ReturnSourceType
+  sourceId          String
+  kind              ReturnKind
+  status            ReturnStatus     @default(COMPLETED)
+  refundAmount      Decimal          @default(0) @db.Decimal(14, 2)
+  refundMethod      PaymentMethod?
+  reason            String
+  createdByUserId   String
+  completedAt       DateTime
+  idempotencyKey    String           @unique
+  createdBy         User             @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items             ReturnItem[]
+  createdAt         DateTime         @default(now())
+
+  @@index([sourceType, sourceId, createdAt])
+  @@index([completedAt])
+  @@map("Return")
+}
+
+model ReturnItem {
+  id                 String       @id @default(uuid())
+  returnId           String
+  productId          String
+  originalLineId     String
+  quantity           Decimal      @db.Decimal(14, 3)
+  physicallyReturned Boolean
+  restockQuantity    Decimal      @default(0) @db.Decimal(14, 3)
+  refundAmount       Decimal      @default(0) @db.Decimal(14, 2)
+  returnRecord       ReturnRecord @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  product            Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([returnId, originalLineId])
+  @@index([originalLineId])
+  @@index([productId])
 }
 
 model Payment {
