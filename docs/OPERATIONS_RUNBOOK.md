@@ -14,6 +14,23 @@ Required production environment:
 
 Never commit production secrets.
 
+### First Owner/Admin bootstrap
+
+The normal seed command is intentionally blocked in production so it cannot reset a live owner password.
+
+After migrations have been applied to a new empty production database, create the first Owner/Admin exactly once:
+
+```bash
+APP_ENV=production \
+DATABASE_URL="..." \
+BOOTSTRAP_OWNER_EMAIL="..." \
+BOOTSTRAP_OWNER_PASSWORD="..." \
+BOOTSTRAP_OWNER_NAME="Pasalho Owner" \
+npm run admin:bootstrap-owner
+```
+
+The bootstrap refuses to run if an active Owner/Admin already exists. After bootstrap, manage staff only through **Users / Audit**.
+
 ## 2. Release sequence
 
 1. Create a database backup.
