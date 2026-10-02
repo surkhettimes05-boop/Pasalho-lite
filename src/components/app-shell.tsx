@@ -1,11 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Role } from "@/generated/prisma/client";
 import { logoutAction } from "@/app/(app)/actions";
 import type { SessionUser } from "@/lib/auth/session";
 
 const plannedModules = [
-  "Products",
-  "Inventory",
   "Receive Stock",
   "Transfers",
   "POS",
@@ -35,8 +34,16 @@ export function AppShell({
         </div>
 
         <nav aria-label="Primary navigation">
-          <Link className="nav-item nav-item-active" href="/">
+          <Link className="nav-item" href="/">
             Dashboard
+          </Link>
+          {user.role === Role.OWNER_ADMIN ? (
+            <Link className="nav-item" href="/products">
+              Products
+            </Link>
+          ) : null}
+          <Link className="nav-item" href="/inventory">
+            Inventory
           </Link>
           {plannedModules.map((module) => (
             <span className="nav-item nav-item-disabled" key={module}>
