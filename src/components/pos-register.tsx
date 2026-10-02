@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PaymentMethod } from "@/generated/prisma/client";
+type PosPaymentMethod = "CASH" | "QR_NON_CASH";
 
 type PosProduct = {
   id: string;
@@ -33,8 +33,8 @@ export function PosRegister({
 }) {
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
-    PaymentMethod.CASH,
+  const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>(
+    "CASH",
   );
 
   const productById = useMemo(
@@ -282,9 +282,9 @@ export function PosRegister({
                 <input
                   type="radio"
                   name="paymentMethod"
-                  value={PaymentMethod.CASH}
-                  checked={paymentMethod === PaymentMethod.CASH}
-                  onChange={() => setPaymentMethod(PaymentMethod.CASH)}
+                  value={"CASH"}
+                  checked={paymentMethod === "CASH"}
+                  onChange={() => setPaymentMethod("CASH")}
                 />
                 Cash
               </label>
@@ -292,10 +292,10 @@ export function PosRegister({
                 <input
                   type="radio"
                   name="paymentMethod"
-                  value={PaymentMethod.QR_NON_CASH}
-                  checked={paymentMethod === PaymentMethod.QR_NON_CASH}
+                  value={"QR_NON_CASH"}
+                  checked={paymentMethod === "QR_NON_CASH"}
                   onChange={() =>
-                    setPaymentMethod(PaymentMethod.QR_NON_CASH)
+                    setPaymentMethod("QR_NON_CASH")
                   }
                 />
                 QR / non-cash
