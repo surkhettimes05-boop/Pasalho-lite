@@ -3,9 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ZodError } from "zod";
-import { PaymentMethod } from "@/generated/prisma/client";
+import { PaymentMethod, Role } from "@/generated/prisma/client";
+import { assertRole } from "@/lib/auth/authorization";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { BusinessError } from "@/lib/business-error";
+import {
+  createCustomer,
+  findCustomerByPhone,
+} from "@/modules/customers/customer.service";
 import { finalizeSale } from "@/modules/pos/pos.service";
 
 function value(formData: FormData, key: string) {
@@ -22,6 +27,98 @@ function operationError(error: unknown) {
   }
 
   return "POS_OPERATION_FAILED";
+}
+
+function customerPayload(customer: {
+  id: string;
+  phoneDisplay: string;
+  phoneNormalized: string;
+  name: string | null;
+  active: boolean;
+  loyaltyAccount: {
+    pointBalance: number;
+    spendRemainder: { toFixed: (digits: number) => string };
+  } | null;
+}) {
+  return {
+    id: customer.id,
+    phoneDisplay: customer.phoneDisplay,
+    phoneNormalized: customer.phoneNormalized,
+    name: customer.name,
+    active: customer.active,
+    pointBalance: customer.loyaltyAccount?.pointBalance ?? 0,
+    spendRemainder:
+      customer.loyaltyAccount?.spendRemainder.toFixed(2) ?? "0.00",
+  };
+}
+
+export async function lookupCustomerForPosAction(phone: string) {
+  const user = await requireCurrentUser();
+  assertRole(user.role, [Role.OWNER_ADMIN, Role.CASHIER_STORE]);
+
+  try {
+    const customer = await findCustomerByPhone(phone);
+
+    if (!customer || !customer.active) {
+      return {
+        ok: false as const,
+        code: "CUSTOMER_NOT_FOUND",
+      };
+    }
+
+    return {
+      ok: true as const,
+      customer: customerPayload(customer),
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      code: operationError(error),
+    };
+  }
+}
+
+export async function createCustomerForPosAction(input: {
+  phone: string;
+  name: string;
+}) {
+  const user = await requireCurrentUser();
+
+  try {
+    const customer = await createCustomer(user, {
+      phone: input.phone,
+      name: input.name,
+      notes: "",
+    });
+
+    return {
+      ok: true as const,
+      customer: customerPayload(customer),
+    };
+  } catch (error) {
+    if (
+      error instanceof BusinessError &&
+      error.code === "CUSTOMER_EXISTS"
+    ) {
+      try {
+        const existing = await findCustomerByPhone(input.phone);
+
+        if (existing?.active) {
+          return {
+            ok: true as const,
+            customer: customerPayload(existing),
+          };
+        }
+      } catch {
+        // Fall through to the original customer error.
+      }
+    }
+
+    return {
+      ok: false as const,
+      code: operationError(error),
+    };
+  }
 }
 
 export async function finalizeSaleAction(formData: FormData) {
@@ -52,6 +149,7 @@ export async function finalizeSaleAction(formData: FormData) {
     const result = await finalizeSale(user, {
       idempotencyKey: value(formData, "idempotencyKey"),
       paymentMethod,
+      customerId: value(formData, "customerId") || null,
       items,
     });
 
@@ -61,6 +159,7 @@ export async function finalizeSaleAction(formData: FormData) {
   }
 
   revalidatePath("/pos");
+  revalidatePath("/customers");
   revalidatePath("/inventory");
   revalidatePath("/inventory/movements");
   redirect(`/pos/${saleId}?success=finalized`);

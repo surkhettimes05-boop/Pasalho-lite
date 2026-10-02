@@ -24,7 +24,7 @@ export default async function PosReceiptPage({
     notFound();
   }
 
-  const { sale, payment } = result;
+  const { sale, payment, loyaltyTransaction } = result;
 
   return (
     <div className="page-stack receipt-page">
@@ -43,7 +43,8 @@ export default async function PosReceiptPage({
 
       {query.success === "finalized" ? (
         <p className="success-message no-print" role="status">
-          Sale finalized, payment recorded and store stock deducted.
+          Sale finalized, payment recorded, stock deducted
+          {sale.customerId ? ", and loyalty updated." : "."}
         </p>
       ) : null}
 
@@ -69,7 +70,9 @@ export default async function PosReceiptPage({
           </div>
           <div>
             <span>Customer</span>
-            <strong>Anonymous</strong>
+            <strong>
+              {sale.customer?.name ?? sale.customer?.phoneDisplay ?? "Anonymous"}
+            </strong>
           </div>
         </div>
 
@@ -120,7 +123,21 @@ export default async function PosReceiptPage({
             <span>Payment status</span>
             <strong>{payment.status}</strong>
           </div>
+          {loyaltyTransaction ? (
+            <div>
+              <span>Loyalty earned</span>
+              <strong>+{loyaltyTransaction.pointsDelta} point(s)</strong>
+            </div>
+          ) : null}
         </div>
+
+        {sale.customer?.loyaltyAccount ? (
+          <p className="receipt-loyalty-note">
+            Current loyalty: {sale.customer.loyaltyAccount.pointBalance} point(s)
+            · Rs {sale.customer.loyaltyAccount.spendRemainder.toFixed(2)} carried
+            toward the next point.
+          </p>
+        ) : null}
 
         <p className="receipt-footer">
           Thank you for shopping at Pasalho.
