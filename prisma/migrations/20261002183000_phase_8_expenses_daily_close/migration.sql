@@ -73,10 +73,13 @@ CREATE TABLE "DailyClose" (
       AND "cashAdded" >= 0
       AND "cashRefunds" >= 0
       AND "cashExpenses" >= 0
-      AND "expectedCash" >= 0
       AND "actualCash" >= 0
       AND "qrNonCashSales" >= 0
       AND "pendingCodAmount" >= 0
+    ),
+    CONSTRAINT "DailyClose_expected_math" CHECK (
+      "expectedCash" = "openingCash" + "cashPosSales" + "codCashCollected"
+        + "cashAdded" - "cashRefunds" - "cashExpenses"
     ),
     CONSTRAINT "DailyClose_variance_math" CHECK ("variance" = "actualCash" - "expectedCash"),
     CONSTRAINT "DailyClose_reopen_fields" CHECK (
