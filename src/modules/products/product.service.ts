@@ -65,12 +65,20 @@ function mapUniqueConstraint(error: unknown): never {
         : String(error.meta?.target ?? "")
     ).toLowerCase();
 
-    if (target.includes("sku")) {
+    const message = error.message.toLowerCase();
+
+    if (target.includes("sku") || message.includes("product_sku_key")) {
       throw new BusinessError("SKU_EXISTS", "That SKU already exists.");
     }
 
-    if (target.includes("barcode")) {
-      throw new BusinessError("BARCODE_EXISTS", "That barcode already exists.");
+    if (
+      target.includes("barcode") ||
+      message.includes("product_barcode_key")
+    ) {
+      throw new BusinessError(
+        "BARCODE_EXISTS",
+        "That barcode already exists.",
+      );
     }
   }
 
@@ -83,6 +91,29 @@ export async function createProduct(actor: SessionUser, input: ProductInput) {
 
   try {
     return await prisma.$transaction(async (tx) => {
+      const existingSku = await tx.product.findUnique({
+        where: { sku: data.sku },
+        select: { id: true },
+      });
+
+      if (existingSku) {
+        throw new BusinessError("SKU_EXISTS", "That SKU already exists.");
+      }
+
+      if (data.barcode) {
+        const existingBarcode = await tx.product.findUnique({
+          where: { barcode: data.barcode },
+          select: { id: true },
+        });
+
+        if (existingBarcode) {
+          throw new BusinessError(
+            "BARCODE_EXISTS",
+            "That barcode already exists.",
+          );
+        }
+      }
+
       const locations = await tx.location.findMany({
         where: { active: true },
         select: { id: true },
@@ -136,6 +167,35 @@ export async function updateProduct(
 
   try {
     return await prisma.$transaction(async (tx) => {
+      const duplicateSku = await tx.product.findFirst({
+        where: {
+          sku: data.sku,
+          id: { not: productId },
+        },
+        select: { id: true },
+      });
+
+      if (duplicateSku) {
+        throw new BusinessError("SKU_EXISTS", "That SKU already exists.");
+      }
+
+      if (data.barcode) {
+        const duplicateBarcode = await tx.product.findFirst({
+          where: {
+            barcode: data.barcode,
+            id: { not: productId },
+          },
+          select: { id: true },
+        });
+
+        if (duplicateBarcode) {
+          throw new BusinessError(
+            "BARCODE_EXISTS",
+            "That barcode already exists.",
+          );
+        }
+      }
+
       const updated = await tx.product.update({
         where: { id: productId },
         data,

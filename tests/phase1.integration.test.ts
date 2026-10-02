@@ -226,6 +226,32 @@ describe("Phase 1 products and inventory ledger", () => {
     expect(balance.onHand.toString()).toBe("7");
   });
 
+  it("rejects reuse of an idempotency key for a different command", async () => {
+    const key = `phase1-conflict-${suffix}`;
+
+    await adjustInventory(owner, {
+      productId,
+      locationId: warehouseId,
+      direction: "IN",
+      quantity: "1",
+      reason: "Idempotency conflict baseline",
+      idempotencyKey: key,
+    });
+
+    await expect(
+      adjustInventory(owner, {
+        productId,
+        locationId: warehouseId,
+        direction: "IN",
+        quantity: "2",
+        reason: "Different command",
+        idempotencyKey: key,
+      }),
+    ).rejects.toMatchObject<Partial<BusinessError>>({
+      code: "IDEMPOTENCY_CONFLICT",
+    });
+  });
+
   it("rejects an adjustment that would create negative physical stock", async () => {
     await expect(
       adjustInventory(owner, {
@@ -249,7 +275,7 @@ describe("Phase 1 products and inventory ledger", () => {
       },
     });
 
-    expect(balance.onHand.toString()).toBe("7");
+    expect(balance.onHand.toString()).toBe("8");
   });
 
   it("keeps projection and ledger reconciled after adjustment out", async () => {
@@ -268,8 +294,8 @@ describe("Phase 1 products and inventory ledger", () => {
     );
 
     expect(reconciliation.matches).toBe(true);
-    expect(reconciliation.projectedOnHand.toString()).toBe("5");
-    expect(reconciliation.ledgerOnHand.toString()).toBe("5");
+    expect(reconciliation.projectedOnHand.toString()).toBe("6");
+    expect(reconciliation.ledgerOnHand.toString()).toBe("6");
   });
 
   it("enforces inventory movement immutability in PostgreSQL", async () => {

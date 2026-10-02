@@ -32,21 +32,37 @@ export async function adjustInventory(
       });
 
       if (existingMovement) {
+        const sameCommand =
+          existingMovement.productId === parsed.productId &&
+          existingMovement.locationId === parsed.locationId &&
+          existingMovement.type === movementType &&
+          existingMovement.quantityDelta.equals(delta) &&
+          existingMovement.reason === parsed.reason;
+
+        if (!sameCommand) {
+          throw new BusinessError(
+            "IDEMPOTENCY_CONFLICT",
+            "That idempotency key was already used for a different adjustment.",
+          );
+        }
+
         return existingMovement;
       }
 
-      const [product, location, balance] = await Promise.all([
-        tx.product.findUnique({ where: { id: parsed.productId } }),
-        tx.location.findUnique({ where: { id: parsed.locationId } }),
-        tx.stockBalance.findUnique({
-          where: {
-            productId_locationId: {
-              productId: parsed.productId,
-              locationId: parsed.locationId,
-            },
+      const product = await tx.product.findUnique({
+        where: { id: parsed.productId },
+      });
+      const location = await tx.location.findUnique({
+        where: { id: parsed.locationId },
+      });
+      const balance = await tx.stockBalance.findUnique({
+        where: {
+          productId_locationId: {
+            productId: parsed.productId,
+            locationId: parsed.locationId,
           },
-        }),
-      ]);
+        },
+      });
 
       if (!product) {
         throw new BusinessError("PRODUCT_NOT_FOUND", "Product not found.");
