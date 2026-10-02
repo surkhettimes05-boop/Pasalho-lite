@@ -190,48 +190,62 @@ export async function getDashboardReport(
       ])
     : Promise.resolve([[], [], [], []] as const);
 
+  const openCodWhere: Prisma.CustomerOrderWhereInput = {
+    status: {
+      in: [
+        CustomerOrderStatus.NEW,
+        CustomerOrderStatus.CONFIRMED,
+        CustomerOrderStatus.PACKED,
+        CustomerOrderStatus.DISPATCHED,
+      ],
+    },
+  };
+
   const codPromise = visibility.cod
-    ? prisma.customerOrder.findMany({
-        where: {
-          status: {
-            in: [
-              CustomerOrderStatus.NEW,
-              CustomerOrderStatus.CONFIRMED,
-              CustomerOrderStatus.PACKED,
-              CustomerOrderStatus.DISPATCHED,
-            ],
+    ? Promise.all([
+        prisma.customerOrder.findMany({
+          where: openCodWhere,
+          orderBy: { createdAt: "asc" },
+          take: 20,
+          include: {
+            customer: {
+              select: { name: true, phoneDisplay: true },
+            },
           },
-        },
-        orderBy: { createdAt: "asc" },
-        take: 20,
-        include: {
-          customer: {
-            select: { name: true, phoneDisplay: true },
-          },
-        },
-      })
-    : Promise.resolve([]);
+        }),
+        prisma.customerOrder.count({ where: openCodWhere }),
+        prisma.customerOrder.aggregate({
+          where: openCodWhere,
+          _sum: { total: true },
+        }),
+      ])
+    : Promise.resolve([[], 0, { _sum: { total: null } }] as const);
+
+  const openTransferWhere: Prisma.TransferWhereInput = {
+    status: {
+      in: [
+        TransferStatus.DRAFT,
+        TransferStatus.READY,
+        TransferStatus.DISPATCHED,
+      ],
+    },
+  };
 
   const transfersPromise = visibility.transfers
-    ? prisma.transfer.findMany({
-        where: {
-          status: {
-            in: [
-              TransferStatus.DRAFT,
-              TransferStatus.READY,
-              TransferStatus.DISPATCHED,
-            ],
+    ? Promise.all([
+        prisma.transfer.findMany({
+          where: openTransferWhere,
+          orderBy: { createdAt: "asc" },
+          take: 20,
+          include: {
+            fromLocation: true,
+            toLocation: true,
+            items: true,
           },
-        },
-        orderBy: { createdAt: "asc" },
-        take: 20,
-        include: {
-          fromLocation: true,
-          toLocation: true,
-          items: true,
-        },
-      })
-    : Promise.resolve([]);
+        }),
+        prisma.transfer.count({ where: openTransferWhere }),
+      ])
+    : Promise.resolve([[], 0] as const);
 
   const cashPromise = visibility.cash
     ? Promise.all([
@@ -256,7 +270,7 @@ export async function getDashboardReport(
       ])
     : Promise.resolve(null);
 
-  const [inventory, salesData, openCodOrders, openTransfers, cashData] =
+  const [inventory, salesData, codDashboard, transferDashboard, cashData] =
     await Promise.all([
       inventoryPromise,
       salesPromise,
@@ -266,6 +280,8 @@ export async function getDashboardReport(
     ]);
 
   const [posSales, deliveredCod, returns, payments] = salesData;
+  const [openCodOrders, openCodCount, openCodAggregate] = codDashboard;
+  const [openTransfers, openTransferCount] = transferDashboard;
   const posSalesValue = sumDecimals(posSales, (row) => row.total);
   const codDeliveredValue = sumDecimals(deliveredCod, (row) => row.total);
   const refunds = sumDecimals(returns, (row) => row.refundAmount);
@@ -287,10 +303,8 @@ export async function getDashboardReport(
     (payment) => payment.amount,
   );
 
-  const codPendingAmount = sumDecimals(
-    openCodOrders,
-    (order) => order.total,
-  );
+  const codPendingAmount =
+    openCodAggregate._sum.total ?? new Prisma.Decimal(0);
 
   return {
     operatingDateKey,
@@ -317,7 +331,9 @@ export async function getDashboardReport(
     lowStock: inventory.lowStock.slice(0, 20),
     lowStockCount: inventory.lowStock.length,
     openTransfers,
+    openTransferCount,
     openCodOrders,
+    openCodCount,
   };
 }
 
@@ -396,8 +412,26 @@ export async function getReportsData(
             },
           },
         }),
+        prisma.customerOrder.aggregate({
+          where: {
+            paymentStatus: PaymentStatus.PENDING,
+            status: { not: CustomerOrderStatus.CANCELLED },
+          },
+          _sum: { total: true },
+        }),
+        prisma.customerOrder.count({
+          where: {
+            paymentStatus: PaymentStatus.PENDING,
+            status: { not: CustomerOrderStatus.CANCELLED },
+          },
+        }),
       ])
-    : Promise.resolve([[], []] as const);
+    : Promise.resolve([
+        [],
+        [],
+        { _sum: { total: null } },
+        0,
+      ] as const);
 
   const inventoryMovementPromise = prisma.inventoryMovement.findMany({
     where: {
@@ -510,7 +544,7 @@ export async function getReportsData(
   ]);
 
   const [sales, deliveredOrders, returns, payments] = salesData;
-  const [codOrders, pendingCod] = codData;
+  const [codOrders, pendingCod, pendingCodAggregate, pendingCodCount] = codData;
   const [expenses, dailyCloses] = cashData;
 
   const dailyMap = new Map(
@@ -527,18 +561,21 @@ export async function getReportsData(
 
   for (const sale of sales) {
     const key = getNepalOperatingDateKey(sale.finalizedAt);
-    dailyMap.get(key)?.posGross.iadd(sale.total);
+    const row = dailyMap.get(key);
+    if (row) row.posGross = row.posGross.add(sale.total);
   }
 
   for (const order of deliveredOrders) {
     if (!order.deliveredAt) continue;
     const key = getNepalOperatingDateKey(order.deliveredAt);
-    dailyMap.get(key)?.codGross.iadd(order.total);
+    const row = dailyMap.get(key);
+    if (row) row.codGross = row.codGross.add(order.total);
   }
 
   for (const record of returns) {
     const key = getNepalOperatingDateKey(record.completedAt);
-    dailyMap.get(key)?.refunds.iadd(record.refundAmount);
+    const row = dailyMap.get(key);
+    if (row) row.refunds = row.refunds.add(record.refundAmount);
   }
 
   const dailySales = Array.from(dailyMap.values()).map((row) => ({
@@ -643,7 +680,9 @@ export async function getReportsData(
     transfers,
     codStatus,
     pendingCod,
-    pendingCodAmount: sumDecimals(pendingCod, (order) => order.total),
+    pendingCodCount,
+    pendingCodAmount:
+      pendingCodAggregate._sum.total ?? new Prisma.Decimal(0),
     returns,
     expenses,
     dailyCloses,
