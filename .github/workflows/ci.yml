@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - phase-0-foundation
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pasalho
+          POSTGRES_PASSWORD: pasalho
+          POSTGRES_DB: pasalho_lite
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pasalho -d pasalho_lite"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_lite?schema=public
+      AUTH_SECRET: phase-zero-ci-auth-secret-that-is-longer-than-thirty-two-characters
+      APP_URL: http://127.0.0.1:3000
+      SESSION_TTL_HOURS: "12"
+      SEED_OWNER_EMAIL: owner@ci.pasalho.test
+      SEED_OWNER_PASSWORD: ci-owner-password-change-outside-ci
+      SEED_OWNER_NAME: CI Owner
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Validate Prisma schema
+        run: npm run prisma:validate
+
+      - name: Apply migrations to empty PostgreSQL
+        run: npm run db:migrate:deploy
+
+      - name: Seed Phase 0 operating data
+        run: npm run db:seed
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Boot smoke test
+        shell: bash
+        run: |
+          npm run start > /tmp/pasalho-lite.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/api/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat /tmp/pasalho-lite.log
+          exit 1
