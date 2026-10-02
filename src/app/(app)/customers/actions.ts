@@ -25,6 +25,7 @@ function errorCode(error: unknown) {
 
 export async function createCustomerAction(formData: FormData) {
   const user = await requireCurrentUser();
+  let customerId: string;
 
   try {
     const customer = await createCustomer(user, {
@@ -33,11 +34,13 @@ export async function createCustomerAction(formData: FormData) {
       notes: value(formData, "notes"),
     });
 
-    revalidatePath("/customers");
-    redirect(`/customers/${customer.id}?success=created`);
+    customerId = customer.id;
   } catch (error) {
     redirect(
       `/customers?error=${encodeURIComponent(errorCode(error))}`,
     );
   }
+
+  revalidatePath("/customers");
+  redirect(`/customers/${customerId}?success=created`);
 }
