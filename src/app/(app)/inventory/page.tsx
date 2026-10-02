@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { LocationType, Role } from "@/generated/prisma/client";
 import { adjustInventoryAction } from "@/app/(app)/inventory/actions";
-import { getCurrentUser, requireCurrentUser } from "@/lib/auth/current-user";
+import { requireCurrentUser } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db";
 import {
   getInventoryRows,

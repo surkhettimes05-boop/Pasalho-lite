@@ -59,9 +59,11 @@ function mapUniqueConstraint(error: unknown): never {
     error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === "P2002"
   ) {
-    const target = Array.isArray(error.meta?.target)
-      ? error.meta.target.join(",")
-      : String(error.meta?.target ?? "");
+    const target = (
+      Array.isArray(error.meta?.target)
+        ? error.meta.target.join(",")
+        : String(error.meta?.target ?? "")
+    ).toLowerCase();
 
     if (target.includes("sku")) {
       throw new BusinessError("SKU_EXISTS", "That SKU already exists.");
