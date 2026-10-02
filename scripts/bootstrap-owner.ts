@@ -2,7 +2,11 @@ import "dotenv/config";
 import { hash } from "bcryptjs";
 import { z } from "zod";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, Role } from "../src/generated/prisma/client";
+import {
+  LocationType,
+  PrismaClient,
+  Role,
+} from "../src/generated/prisma/client";
 
 const schema = z.object({
   APP_ENV: z.enum(["staging", "production"]),
@@ -37,33 +41,72 @@ try {
   }
 
   const passwordHash = await hash(env.BOOTSTRAP_OWNER_PASSWORD, 12);
-  const user = await prisma.user.create({
-    data: {
-      name: env.BOOTSTRAP_OWNER_NAME,
-      email,
-      passwordHash,
-      role: Role.OWNER_ADMIN,
-      active: true,
-    },
-  });
 
-  await prisma.auditLog.create({
-    data: {
-      actorUserId: null,
-      action: "OWNER_ADMIN_BOOTSTRAPPED",
-      entityType: "User",
-      entityId: user.id,
-      afterData: {
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        active: user.active,
-        environment: env.APP_ENV,
+  const result = await prisma.$transaction(async (tx) => {
+    const warehouse = await tx.location.upsert({
+      where: { code: "WAREHOUSE_MAIN" },
+      update: {
+        name: "Central Warehouse",
+        type: LocationType.WAREHOUSE,
+        active: true,
       },
-    },
+      create: {
+        code: "WAREHOUSE_MAIN",
+        name: "Central Warehouse",
+        type: LocationType.WAREHOUSE,
+        active: true,
+      },
+    });
+
+    const store = await tx.location.upsert({
+      where: { code: "STORE_MAIN" },
+      update: {
+        name: "Pasalho Store",
+        type: LocationType.STORE,
+        active: true,
+      },
+      create: {
+        code: "STORE_MAIN",
+        name: "Pasalho Store",
+        type: LocationType.STORE,
+        active: true,
+      },
+    });
+
+    const user = await tx.user.create({
+      data: {
+        name: env.BOOTSTRAP_OWNER_NAME,
+        email,
+        passwordHash,
+        role: Role.OWNER_ADMIN,
+        active: true,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorUserId: null,
+        action: "PRODUCTION_BOOTSTRAP_COMPLETED",
+        entityType: "User",
+        entityId: user.id,
+        afterData: {
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          active: user.active,
+          warehouseId: warehouse.id,
+          storeId: store.id,
+          environment: env.APP_ENV,
+        },
+      },
+    });
+
+    return { user, warehouse, store };
   });
 
-  console.log("Initial Owner/Admin account bootstrapped.");
+  console.log(
+    `Production bootstrap completed for ${result.user.email}; warehouse=${result.warehouse.code}; store=${result.store.code}.`,
+  );
 } finally {
   await prisma.$disconnect();
 }
