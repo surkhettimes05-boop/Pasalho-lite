@@ -51,8 +51,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Dependency critical audit
-        run: npm audit --audit-level=critical
+      - name: Dependency high-severity audit
+        run: npm audit --audit-level=high
 
       - name: Record non-critical dependency findings
         run: npm audit --omit=dev || true
