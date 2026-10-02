@@ -112,6 +112,25 @@ enum ReturnStatus {
   COMPLETED
 }
 
+enum CashMovementType {
+  OPENING_CASH
+  CASH_ADDED
+  EXPENSE
+  CASH_PAYOUT
+  REFUND_OUT
+  OTHER_APPROVED
+}
+
+enum CashMovementEffect {
+  IN
+  OUT
+}
+
+enum DailyCloseStatus {
+  CLOSED
+  REOPENED
+}
+
 model User {
   id                  String               @id @default(uuid())
   name                String
@@ -130,6 +149,9 @@ model User {
   loyaltyTransactions LoyaltyTransaction[]
   customerOrdersCreated CustomerOrder[] @relation("CustomerOrderCreatedBy")
   returnsCreated       ReturnRecord[]
+  cashMovements        CashMovement[]
+  dailyClosesClosed    DailyClose[] @relation("DailyCloseClosedBy")
+  dailyClosesReopened  DailyClose[] @relation("DailyCloseReopenedBy")
   auditLogs           AuditLog[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -162,6 +184,8 @@ model Location {
   sales              Sale[]
   customerOrders     CustomerOrder[]
   reservations       InventoryReservation[]
+  cashMovements      CashMovement[]
+  dailyCloses        DailyClose[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -548,6 +572,61 @@ model Payment {
   @@index([status, createdAt])
   @@index([method, createdAt])
   @@index([recordedByUserId, createdAt])
+}
+
+model CashMovement {
+  id              String             @id @default(uuid())
+  storeLocationId String
+  operatingDate   DateTime           @db.Date
+  type            CashMovementType
+  effect          CashMovementEffect
+  amount          Decimal            @db.Decimal(14, 2)
+  category        String
+  reason          String
+  referenceType   String?
+  referenceId     String?
+  idempotencyKey  String             @unique
+  userId          String
+  storeLocation   Location           @relation(fields: [storeLocationId], references: [id], onDelete: Restrict)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt       DateTime           @default(now())
+
+  @@index([storeLocationId, operatingDate, type])
+  @@index([operatingDate, createdAt])
+  @@index([referenceType, referenceId])
+  @@index([userId, createdAt])
+}
+
+model DailyClose {
+  id                 String           @id @default(uuid())
+  storeLocationId    String
+  operatingDate      DateTime         @db.Date
+  openingCash        Decimal          @db.Decimal(14, 2)
+  cashPosSales       Decimal          @db.Decimal(14, 2)
+  codCashCollected   Decimal          @db.Decimal(14, 2)
+  cashAdded          Decimal          @db.Decimal(14, 2)
+  cashRefunds        Decimal          @db.Decimal(14, 2)
+  cashExpenses       Decimal          @db.Decimal(14, 2)
+  expectedCash       Decimal          @db.Decimal(14, 2)
+  actualCash         Decimal          @db.Decimal(14, 2)
+  variance           Decimal          @db.Decimal(14, 2)
+  qrNonCashSales     Decimal          @db.Decimal(14, 2)
+  pendingCodAmount   Decimal          @db.Decimal(14, 2)
+  notes              String?
+  status             DailyCloseStatus @default(CLOSED)
+  closeIdempotencyKey String          @unique
+  closedByUserId     String
+  closedAt           DateTime
+  reopenIdempotencyKey String?        @unique
+  reopenedByUserId   String?
+  reopenedAt         DateTime?
+  storeLocation      Location         @relation(fields: [storeLocationId], references: [id], onDelete: Restrict)
+  closedBy           User             @relation("DailyCloseClosedBy", fields: [closedByUserId], references: [id], onDelete: Restrict)
+  reopenedBy         User?            @relation("DailyCloseReopenedBy", fields: [reopenedByUserId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+
+  @@index([storeLocationId, operatingDate, status])
+  @@index([operatingDate, closedAt])
 }
 
 model AuditLog {
