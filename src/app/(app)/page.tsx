@@ -21,7 +21,7 @@ export default async function DashboardPage() {
           <p className="eyebrow">Operations</p>
           <h2>Operations dashboard</h2>
           <p className="muted">
-            Live read-only view from Pasalho&apos;s transaction records for{" "}
+            Today&apos;s sales, cash, fulfillment and inventory exceptions for{" "}
             {today}.
           </p>
         </div>

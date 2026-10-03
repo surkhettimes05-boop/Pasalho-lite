@@ -77,49 +77,62 @@ export default async function DailyClosePage({
         </p>
       ) : null}
 
-      <section className="close-equation">
-        <article className="summary-card">
-          <span>Opening cash</span>
-          <strong>Rs {s.openingCash.toFixed(2)}</strong>
-        </article>
-        <article className="summary-card">
-          <span>Cash POS sales</span>
-          <strong>+ Rs {s.cashPosSales.toFixed(2)}</strong>
-        </article>
-        <article className="summary-card">
-          <span>COD collected</span>
-          <strong>+ Rs {s.codCashCollected.toFixed(2)}</strong>
-        </article>
-        <article className="summary-card">
-          <span>Cash added</span>
-          <strong>+ Rs {s.cashAdded.toFixed(2)}</strong>
-        </article>
-        <article className="summary-card">
-          <span>Cash refunds</span>
-          <strong>− Rs {s.cashRefunds.toFixed(2)}</strong>
-        </article>
-        <article className="summary-card">
-          <span>Expenses / payouts</span>
-          <strong>− Rs {s.cashExpenses.toFixed(2)}</strong>
-        </article>
-      </section>
+      <section className="panel close-ledger">
+        <div className="panel-heading close-ledger-heading">
+          <div>
+            <p className="eyebrow">Drawer reconciliation</p>
+            <h3>Expected cash</h3>
+            <p className="muted">
+              The system builds the drawer total from recorded cash activity.
+            </p>
+          </div>
+          <strong className="close-expected">Rs {s.expectedCash.toFixed(2)}</strong>
+        </div>
 
-      <section className="panel close-total-panel">
-        <div>
-          <p className="eyebrow">System expected physical cash</p>
-          <strong className="close-expected">
-            Rs {s.expectedCash.toFixed(2)}
-          </strong>
-        </div>
-        <div className="close-noncash">
-          <span>QR / non-cash sales</span>
-          <strong>Rs {s.qrNonCashSales.toFixed(2)}</strong>
-          <small>Shown separately; never added to drawer cash.</small>
-        </div>
-        <div className="close-noncash">
-          <span>Pending COD</span>
-          <strong>Rs {s.pendingCodAmount.toFixed(2)}</strong>
-          <small>Outstanding snapshot; not drawer cash.</small>
+        <div className="close-ledger-grid">
+          <div className="close-ledger-rows" role="list" aria-label="Expected cash calculation">
+            <div className="close-ledger-row" role="listitem">
+              <span>Opening cash</span>
+              <strong>Rs {s.openingCash.toFixed(2)}</strong>
+            </div>
+            <div className="close-ledger-row" role="listitem">
+              <span>Cash POS sales</span>
+              <strong>+ Rs {s.cashPosSales.toFixed(2)}</strong>
+            </div>
+            <div className="close-ledger-row" role="listitem">
+              <span>COD collected</span>
+              <strong>+ Rs {s.codCashCollected.toFixed(2)}</strong>
+            </div>
+            <div className="close-ledger-row" role="listitem">
+              <span>Cash added</span>
+              <strong>+ Rs {s.cashAdded.toFixed(2)}</strong>
+            </div>
+            <div className="close-ledger-row close-ledger-out" role="listitem">
+              <span>Cash refunds</span>
+              <strong>− Rs {s.cashRefunds.toFixed(2)}</strong>
+            </div>
+            <div className="close-ledger-row close-ledger-out" role="listitem">
+              <span>Expenses / payouts</span>
+              <strong>− Rs {s.cashExpenses.toFixed(2)}</strong>
+            </div>
+            <div className="close-ledger-row close-ledger-total" role="listitem">
+              <span>Expected physical cash</span>
+              <strong>Rs {s.expectedCash.toFixed(2)}</strong>
+            </div>
+          </div>
+
+          <aside className="close-side-facts" aria-label="Non-cash context">
+            <div>
+              <span>QR / non-cash sales</span>
+              <strong>Rs {s.qrNonCashSales.toFixed(2)}</strong>
+              <small>Not included in drawer cash.</small>
+            </div>
+            <div>
+              <span>Pending COD</span>
+              <strong>Rs {s.pendingCodAmount.toFixed(2)}</strong>
+              <small>Outstanding orders, not cash collected.</small>
+            </div>
+          </aside>
         </div>
       </section>
 
