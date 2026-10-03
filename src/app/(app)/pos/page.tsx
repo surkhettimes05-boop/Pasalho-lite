@@ -42,7 +42,7 @@ export default async function PosPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 5</p>
+          <p className="eyebrow">Operations</p>
           <h2>POS</h2>
           <p className="muted">
             Store sales with optional phone-based customer identity and
