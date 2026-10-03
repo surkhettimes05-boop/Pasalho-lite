@@ -2,7 +2,6 @@ import {
   CashMovementEffect,
   CashMovementType,
   CustomerOrderStatus,
-  DailyCloseStatus,
   LocationType,
   PaymentMethod,
   PaymentStatus,

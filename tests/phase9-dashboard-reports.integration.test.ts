@@ -37,7 +37,6 @@ let warehouseId: string;
 let storeId: string;
 let productId: string;
 let customerId: string;
-let saleCashId: string;
 let saleCashLineId: string;
 let returnId: string;
 
@@ -171,7 +170,6 @@ beforeAll(async () => {
     },
     include: { items: true },
   });
-  saleCashId = cashSale.id;
   saleCashLineId = cashSale.items[0].id;
 
   const qrSale = await prisma.sale.create({
@@ -502,7 +500,14 @@ describe("Phase 9 dashboard and reports", () => {
     expect(storeRow?.minimum.toString()).toBe("2");
 
     const balances = await prisma.stockBalance.findMany({
-      include: { product: { select: { costPrice: true } }, location: true },
+      where: {
+        product: { active: true },
+        location: { active: true },
+      },
+      include: {
+        product: { select: { costPrice: true, active: true } },
+        location: true,
+      },
     });
 
     const expectedWarehouseValue = balances
