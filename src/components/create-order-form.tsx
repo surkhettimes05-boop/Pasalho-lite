@@ -68,6 +68,18 @@ export function CreateOrderForm({
     }
     return map;
   }, [products]);
+  const duplicateSkus = useMemo(() => {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const line of lines) {
+      const raw = line.productKey.trim();
+      const product = productByKey.get(raw.toUpperCase()) ?? productByKey.get(raw);
+      if (!product) continue;
+      if (seen.has(product.id)) duplicates.add(product.sku);
+      seen.add(product.id);
+    }
+    return duplicates;
+  }, [lines, productByKey]);
 
   function selectedProduct(line: Line) {
     const raw = line.productKey.trim();
@@ -149,7 +161,7 @@ export function CreateOrderForm({
         ) : (
           <>
             <div className="customer-lookup-row">
-              <input
+              <input aria-label="Customer phone"
                 value={phone}
                 onChange={(event) => setPhone(event.target.value)}
                 placeholder="98XXXXXXXX"
@@ -160,7 +172,7 @@ export function CreateOrderForm({
             </div>
             {message.includes("not found") ? (
               <div className="customer-create-row">
-                <input
+                <input aria-label="Customer name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Name (optional)"
@@ -235,6 +247,7 @@ export function CreateOrderForm({
                     ? `${product.name} · Rs ${product.sellingPrice} · ${product.available} ${product.unit} available now`
                     : "Choose an active store SKU."}
                 </small>
+                {product && duplicateSkus.has(product.sku) ? <small className="error-message">{product.sku} is already in this order. Change its quantity instead.</small> : null}
               </div>
 
               <label>
@@ -298,8 +311,9 @@ export function CreateOrderForm({
           NEW orders do not reserve or deduct stock. Product prices and totals
           are recalculated by the server when the order is created.
         </p>
-        <button className="primary-button" type="submit" disabled={!customer}>
-          Create NEW COD order
+        {!customer ? <p className="muted">Select or create a customer before creating this COD order.</p> : null}
+        <button className="primary-button" type="submit" disabled={!customer || duplicateSkus.size > 0 || busy}>
+          Create COD order
         </button>
       </div>
     </form>
