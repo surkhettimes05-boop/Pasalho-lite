@@ -28,6 +28,7 @@ const tables = [
   "CashMovement",
   "DailyClose",
   "AuditLog",
+  "ProductImportBatch",
 ];
 
 async function snapshot(connectionString: string) {

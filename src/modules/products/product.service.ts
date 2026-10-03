@@ -8,7 +8,7 @@ import {
   type ProductInput,
 } from "@/modules/products/product.schemas";
 
-function normalizeProductInput(input: ProductInput) {
+export function normalizeProductInput(input: ProductInput) {
   const parsed = productInputSchema.parse(input);
 
   return {
@@ -26,7 +26,7 @@ function normalizeProductInput(input: ProductInput) {
   };
 }
 
-function productAuditSnapshot(product: {
+export function productAuditSnapshot(product: {
   sku: string;
   barcode: string | null;
   name: string;
