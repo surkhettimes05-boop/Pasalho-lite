@@ -248,6 +248,9 @@ export function PosRegister({
             Add exact match
           </button>
         </form>
+        <p className="pos-keyboard-hint">
+          Scanner tip: barcode or exact SKU + Enter adds the product immediately.
+        </p>
 
         <div className="pos-product-results">
           {matches.length === 0 ? (
@@ -319,6 +322,7 @@ export function PosRegister({
             <>
               <div className="customer-lookup-row">
                 <input
+                  aria-label="Customer phone"
                   value={customerPhone}
                   onChange={(event) => setCustomerPhone(event.target.value)}
                   placeholder="Customer phone"
@@ -335,6 +339,7 @@ export function PosRegister({
               {customerMessage.includes("not found") ? (
                 <div className="customer-create-row">
                   <input
+                    aria-label="Customer name"
                     value={customerName}
                     onChange={(event) => setCustomerName(event.target.value)}
                     placeholder="Name (optional)"
