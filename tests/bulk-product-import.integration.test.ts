@@ -85,7 +85,15 @@ describe("bulk SKU import", () => {
     expect(result.replayed).toBe(false);
 
     const created = await prisma.product.findMany({
-      where: { sku: { in: [`BULK-A-${suffix}`, `BULK-B-${suffix}`, `BULK-C-${suffix}`] } },
+      where: {
+        sku: {
+          in: [
+            `BULK-A-${suffix}`.toUpperCase(),
+            `BULK-B-${suffix}`.toUpperCase(),
+            `BULK-C-${suffix}`.toUpperCase(),
+          ],
+        },
+      },
       orderBy: { sku: "asc" },
       include: { stockBalances: true },
     });
