@@ -75,7 +75,7 @@ export default async function ReceivingPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 2</p>
+          <p className="eyebrow">Inventory</p>
           <h2>Receive stock</h2>
           <p className="muted">
             Post physical supplier deliveries into the central warehouse. A
