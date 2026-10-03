@@ -6,6 +6,7 @@ import {
   createProductAction,
   setProductActiveAction,
 } from "@/app/(app)/products/actions";
+import { BulkProductImport } from "@/components/bulk-product-import";
 
 const PAGE_SIZE = 50;
 
@@ -75,7 +76,7 @@ export default async function ProductsPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 1</p>
+          <p className="eyebrow">Catalog</p>
           <h2>Products</h2>
           <p className="muted">
             Maintain the SKU catalog. Stock is controlled separately through
@@ -173,6 +174,8 @@ export default async function ProductsPage({
           </div>
         </form>
       </section>
+
+      <BulkProductImport />
 
       <section className="panel">
         <div className="panel-heading">
