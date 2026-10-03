@@ -46,7 +46,7 @@ export default async function OrdersPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 6</p>
+          <p className="eyebrow">Operations</p>
           <h2>WhatsApp / phone COD orders</h2>
           <p className="muted">
             Staff-entered customer orders. WhatsApp is communication only; this
