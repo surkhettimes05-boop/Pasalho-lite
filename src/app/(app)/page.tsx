@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 9</p>
+          <p className="eyebrow">Operations</p>
           <h2>Operations dashboard</h2>
           <p className="muted">
             Live read-only view from Pasalho&apos;s transaction records for{" "}
@@ -80,7 +80,7 @@ export default async function DashboardPage() {
           <article className="summary-card">
             <span>Expected drawer cash</span>
             <strong>{money(report.expectedCash)}</strong>
-            <small>Current Phase 8 close formula</small>
+            <small>Based on cash activity today</small>
           </article>
           <article className="summary-card">
             <span>Expenses today</span>
