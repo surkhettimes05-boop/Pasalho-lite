@@ -10,6 +10,10 @@ import {
   setProductActive,
   updateProduct,
 } from "@/modules/products/product.service";
+import {
+  commitBulkProductImport,
+  previewBulkProductImport,
+} from "@/modules/products/bulk-import.service";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "");
@@ -91,4 +95,64 @@ export async function setProductActiveAction(formData: FormData) {
   revalidatePath("/products");
   revalidatePath("/inventory");
   redirect(`/products?success=${active ? "activated" : "deactivated"}`);
+}
+
+export async function previewBulkProductImportAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const file = formData.get("file");
+
+  if (!(file instanceof File)) {
+    return {
+      ok: false as const,
+      code: "BULK_FILE_REQUIRED",
+      message: "Choose a CSV or XLSX file.",
+    };
+  }
+
+  try {
+    const preview = await previewBulkProductImport(user, file);
+    return { ok: true as const, preview };
+  } catch (error) {
+    return {
+      ok: false as const,
+      code: error instanceof BusinessError ? error.code : "BULK_IMPORT_FAILED",
+      message:
+        error instanceof Error
+          ? error.message
+          : "The bulk product file could not be previewed.",
+    };
+  }
+}
+
+export async function commitBulkProductImportAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  const file = formData.get("file");
+  const idempotencyKey = value(formData, "idempotencyKey");
+
+  if (!(file instanceof File)) {
+    return {
+      ok: false as const,
+      code: "BULK_FILE_REQUIRED",
+      message: "Choose a CSV or XLSX file.",
+    };
+  }
+
+  try {
+    const result = await commitBulkProductImport(user, {
+      file,
+      idempotencyKey,
+    });
+    revalidatePath("/products");
+    revalidatePath("/inventory");
+    return { ok: true as const, result };
+  } catch (error) {
+    return {
+      ok: false as const,
+      code: error instanceof BusinessError ? error.code : "BULK_IMPORT_FAILED",
+      message:
+        error instanceof Error
+          ? error.message
+          : "The bulk product import could not be completed.",
+    };
+  }
 }
