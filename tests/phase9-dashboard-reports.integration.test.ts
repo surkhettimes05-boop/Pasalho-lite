@@ -37,7 +37,6 @@ let warehouseId: string;
 let storeId: string;
 let productId: string;
 let customerId: string;
-let saleCashId: string;
 let saleCashLineId: string;
 let returnId: string;
 
@@ -171,7 +170,6 @@ beforeAll(async () => {
     },
     include: { items: true },
   });
-  saleCashId = cashSale.id;
   saleCashLineId = cashSale.items[0].id;
 
   const qrSale = await prisma.sale.create({

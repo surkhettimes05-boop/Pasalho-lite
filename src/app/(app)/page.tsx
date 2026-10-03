@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { Role } from "@/generated/prisma/client";
 import { requireCurrentUser } from "@/lib/auth/current-user";
-import { formatNepalDateTime, getNepalOperatingDateKey } from "@/lib/time";
+import { getNepalOperatingDateKey } from "@/lib/time";
 import { getDashboardReport } from "@/modules/reports/report.service";
 
 export const dynamic = "force-dynamic";

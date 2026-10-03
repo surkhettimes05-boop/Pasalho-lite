@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
-  CashMovementEffect,
   CashMovementType,
   CustomerOrderStatus,
   DailyCloseStatus,
@@ -29,7 +28,6 @@ const operatingDate = "2026-09-11";
 
 let owner: SessionUser;
 let cashier: SessionUser;
-let warehouse: SessionUser;
 let storeId: string;
 let customerId: string;
 let closeId: string;
@@ -42,7 +40,6 @@ beforeAll(async () => {
 
   owner = { id: user.id, name: user.name, email: user.email, role: user.role };
   cashier = { ...owner, role: Role.CASHIER_STORE };
-  warehouse = { ...owner, role: Role.WAREHOUSE_STAFF };
 
   storeId = (
     await prisma.location.findUniqueOrThrow({ where: { code: "STORE_MAIN" } })
