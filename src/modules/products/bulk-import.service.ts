@@ -147,6 +147,34 @@ async function rowsFromFile(file: File): Promise<SheetCell[][]> {
   }
 }
 
+/** Compatibility parser retained for the pre-batch parser tests and callers. */
+export async function parseProductFile(
+  fileName: string,
+  bytes: Uint8Array,
+): Promise<Array<{ sku: string; barcode: string; active: string; [key: string]: string }>> {
+  const file = new File([new Blob([Buffer.from(bytes)])], fileName);
+  const sheet = await rowsFromFile(file);
+  if (sheet.length === 0) {
+    throw new BusinessError("BULK_FILE_INVALID", "The file is empty.");
+  }
+  const { map, globalErrors } = buildColumnMap(sheet[0]);
+  if (globalErrors.length > 0) {
+    throw new BusinessError("BULK_REQUIRED_COLUMN_MISSING", globalErrors.join(" "));
+  }
+  return sheet.slice(1).filter((row) => !isBlankRow(row)).map((row) => {
+    const result = {
+      sku: "",
+      barcode: "",
+      active: "",
+    } as { sku: string; barcode: string; active: string; [key: string]: string };
+    for (const field of REQUIRED_FIELDS.concat("barcode", "mrp", "active")) {
+      result[field] = cellText(rowCell(row, map, field));
+    }
+    if (!result.active) result.active = "true";
+    return result;
+  });
+}
+
 function buildColumnMap(header: readonly SheetCell[]) {
   const map = new Map<ProductField, number>();
   const globalErrors: string[] = [];
