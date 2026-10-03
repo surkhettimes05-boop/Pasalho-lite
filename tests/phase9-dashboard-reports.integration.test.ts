@@ -502,7 +502,14 @@ describe("Phase 9 dashboard and reports", () => {
     expect(storeRow?.minimum.toString()).toBe("2");
 
     const balances = await prisma.stockBalance.findMany({
-      include: { product: { select: { costPrice: true } }, location: true },
+      where: {
+        product: { active: true },
+        location: { active: true },
+      },
+      include: {
+        product: { select: { costPrice: true, active: true } },
+        location: true,
+      },
     });
 
     const expectedWarehouseValue = balances

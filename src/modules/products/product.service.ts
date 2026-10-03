@@ -85,6 +85,37 @@ function mapUniqueConstraint(error: unknown): never {
   throw error;
 }
 
+export async function initializeProductZeroBalances(
+  tx: Prisma.TransactionClient,
+  productIds: readonly string[],
+  locationIds?: readonly string[],
+) {
+  if (productIds.length === 0) return;
+
+  const resolvedLocationIds =
+    locationIds ??
+    (
+      await tx.location.findMany({
+        where: { active: true },
+        select: { id: true },
+      })
+    ).map((location) => location.id);
+
+  if (resolvedLocationIds.length === 0) return;
+
+  await tx.stockBalance.createMany({
+    data: productIds.flatMap((productId) =>
+      resolvedLocationIds.map((locationId) => ({
+        productId,
+        locationId,
+        onHand: new Prisma.Decimal(0),
+        reserved: new Prisma.Decimal(0),
+      })),
+    ),
+    skipDuplicates: true,
+  });
+}
+
 export async function createProduct(actor: SessionUser, input: ProductInput) {
   assertRole(actor.role, [Role.OWNER_ADMIN]);
   const data = normalizeProductInput(input);
@@ -114,23 +145,9 @@ export async function createProduct(actor: SessionUser, input: ProductInput) {
         }
       }
 
-      const locations = await tx.location.findMany({
-        where: { active: true },
-        select: { id: true },
-      });
-
       const created = await tx.product.create({ data });
 
-      if (locations.length > 0) {
-        await tx.stockBalance.createMany({
-          data: locations.map((location) => ({
-            productId: created.id,
-            locationId: location.id,
-            onHand: new Prisma.Decimal(0),
-            reserved: new Prisma.Decimal(0),
-          })),
-        });
-      }
+      await initializeProductZeroBalances(tx, [created.id]);
 
       await tx.auditLog.create({
         data: {
