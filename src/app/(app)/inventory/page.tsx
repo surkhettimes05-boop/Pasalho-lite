@@ -85,7 +85,7 @@ export default async function InventoryPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 1</p>
+          <p className="eyebrow">Inventory</p>
           <h2>Inventory</h2>
           <p className="muted">
             Balance is a projection. Every physical stock change must be
