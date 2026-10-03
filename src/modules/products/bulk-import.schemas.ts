@@ -1,34 +1,41 @@
 import { z } from "zod";
 
-export const BULK_HEADERS = [
-  "SKU", "Barcode", "Product Name", "Category", "Unit", "Cost Price",
-  "Selling Price", "MRP", "Warehouse Minimum", "Store Minimum", "Active",
-] as const;
+export const MAX_BULK_PRODUCT_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_BULK_PRODUCT_ROWS = 5000;
 
-export const bulkRowSchema = z.object({
-  sku: z.string(), barcode: z.string(), name: z.string(), category: z.string(),
-  unit: z.string(), costPrice: z.string(), sellingPrice: z.string(), mrp: z.string(),
-  warehouseMinStock: z.string(), storeMinStock: z.string(), active: z.string(),
+export const bulkProductCommitSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(120),
 });
 
-export type BulkRow = z.infer<typeof bulkRowSchema>;
-export type BulkPreviewRow = BulkRow & { rowNumber: number; status: "VALID" | "INVALID"; error?: string };
+export type BulkProductPreviewRow = {
+  rowNumber: number;
+  sku: string;
+  barcode: string;
+  name: string;
+  category: string;
+  unit: string;
+  costPrice: string;
+  sellingPrice: string;
+  mrp: string;
+  warehouseMinStock: string;
+  storeMinStock: string;
+  active: boolean;
+  errors: string[];
+};
 
-export function normalizeHeader(value: string) {
-  return value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
-}
+export type BulkProductPreview = {
+  fileName: string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  globalErrors: string[];
+  rows: BulkProductPreviewRow[];
+};
 
-export const HEADER_ALIASES: Record<string, string> = Object.fromEntries([
-  ["sku", "SKU"], ["barcode", "Barcode"], ["product name", "Product Name"],
-  ["category", "Category"], ["unit", "Unit"], ["cost price", "Cost Price"],
-  ["selling price", "Selling Price"], ["mrp", "MRP"],
-  ["warehouse minimum", "Warehouse Minimum"], ["store minimum", "Store Minimum"],
-  ["active", "Active"],
-].map(([key, value]) => [normalizeHeader(key), value]));
-
-export function parseBoolean(value: string) {
-  if (!value.trim()) return true;
-  if (["true", "1", "yes", "y"].includes(value.trim().toLowerCase())) return true;
-  if (["false", "0", "no", "n"].includes(value.trim().toLowerCase())) return false;
-  return null;
-}
+export type BulkProductImportResult = {
+  batchId: string;
+  fileName: string;
+  rowCount: number;
+  createdCount: number;
+  replayed: boolean;
+};

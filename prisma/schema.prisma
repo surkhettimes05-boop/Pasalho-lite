@@ -153,6 +153,7 @@ model User {
   dailyClosesClosed    DailyClose[] @relation("DailyCloseClosedBy")
   dailyClosesReopened  DailyClose[] @relation("DailyCloseReopenedBy")
   auditLogs           AuditLog[]
+  productImportBatches ProductImportBatch[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -627,6 +628,20 @@ model DailyClose {
 
   @@index([storeLocationId, operatingDate, status])
   @@index([operatingDate, closedAt])
+}
+
+model ProductImportBatch {
+  id              String   @id @default(uuid())
+  idempotencyKey  String   @unique
+  fileName        String
+  fileSha256      String
+  rowCount        Int
+  createdCount    Int
+  createdByUserId String
+  createdBy       User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now())
+
+  @@index([createdByUserId, createdAt])
 }
 
 model AuditLog {

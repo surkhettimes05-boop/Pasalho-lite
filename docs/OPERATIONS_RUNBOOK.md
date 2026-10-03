@@ -155,3 +155,13 @@ Removal rule:
 3. rerun the full high-severity audit, migrations, tests, backup/restore and canonical E2E gate.
 
 Do not run `npm audit fix --force` blindly: the current audit recommendation proposes a breaking Prisma major-line change.
+
+### Development-tool audit findings
+
+The release gate hard-fails on HIGH/CRITICAL findings in production dependencies with:
+
+`npm audit --omit=dev --audit-level=high`
+
+The full dependency audit is still emitted in CI for visibility. As of October 2026, the Next.js ESLint toolchain resolves through `fast-glob -> micromatch -> braces@3.0.3`, and npm reports the unpatched `braces` recursion advisory. Because this chain is development-only lint tooling and no patched `braces` release exists, it is tracked rather than treated as a production-runtime blocker.
+
+Do not suppress or ignore future runtime findings. Revisit this exception when the upstream Next.js/ESLint dependency chain changes or a patched `braces` release is available.
