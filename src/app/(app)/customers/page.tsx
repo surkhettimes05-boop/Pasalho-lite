@@ -43,7 +43,7 @@ export default async function CustomersPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 5</p>
+          <p className="eyebrow">Customers</p>
           <h2>Customers</h2>
           <p className="muted">
             Phone-based customer identity, purchase history and loyalty ledger.

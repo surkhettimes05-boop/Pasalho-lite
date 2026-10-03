@@ -60,7 +60,7 @@ export default async function CashPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 8</p>
+          <p className="eyebrow">Finance</p>
           <h2>Expenses & cash movements</h2>
           <p className="muted">
             Append-only drawer movements used by daily reconciliation.

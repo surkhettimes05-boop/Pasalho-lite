@@ -48,7 +48,7 @@ export default async function ReportsPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 9</p>
+          <p className="eyebrow">Management</p>
           <h2>Reports</h2>
           <p className="muted">
             Read-only operational reports. Maximum V1 range: 31 days.

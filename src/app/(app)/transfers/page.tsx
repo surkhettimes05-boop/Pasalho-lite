@@ -85,7 +85,7 @@ export default async function TransfersPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 3</p>
+          <p className="eyebrow">Inventory</p>
           <h2>Warehouse → Store transfers</h2>
           <p className="muted">
             Draft and prepare stock movements, dispatch from the warehouse, then

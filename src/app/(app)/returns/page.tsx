@@ -37,7 +37,7 @@ export default async function ReturnsPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 7</p>
+          <p className="eyebrow">Customers</p>
           <h2>Returns & refunds</h2>
           <p className="muted">
             Correct completed transactions without rewriting the original sale

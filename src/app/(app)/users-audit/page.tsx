@@ -34,7 +34,7 @@ export default async function UsersAuditPage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 10</p>
+          <p className="eyebrow">Management</p>
           <h2>Users & audit</h2>
           <p className="muted">
             Owner-only access control and recent high-risk operational history.

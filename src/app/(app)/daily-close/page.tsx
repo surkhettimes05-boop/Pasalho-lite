@@ -44,7 +44,7 @@ export default async function DailyClosePage({
     <div className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Phase 8</p>
+          <p className="eyebrow">Finance</p>
           <h2>Daily close</h2>
           <p className="muted">
             Reconcile the Pasalho Store physical drawer against system cash.
