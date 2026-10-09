@@ -5,8 +5,11 @@ import { getDashboardReport } from "@/modules/reports/report.service";
 
 export const dynamic = "force-dynamic";
 
-function money(value: { toFixed: (digits: number) => string }) {
-  return `Rs ${value.toFixed(2)}`;
+function money(value: { toString: () => string }) {
+  const numeric = Number(value.toString());
+  return Number.isFinite(numeric)
+    ? `Rs ${numeric.toFixed(2)}`
+    : `Rs ${value.toString()}`;
 }
 
 export default async function DashboardPage() {
