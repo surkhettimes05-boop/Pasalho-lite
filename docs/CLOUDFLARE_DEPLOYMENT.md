@@ -182,3 +182,8 @@ The exact deployed commit must still satisfy `docs/PRODUCTION_RELEASE_CHECKLIST.
 - `/api/ready`,
 - POS/COD concurrency checks,
 - full operational simulation before accepting real customer money.
+
+
+## Troubleshooting: branch changes and retries
+
+After changing Cloudflare's Production branch, do not retry an older failed deployment created from another branch. A retry can replay the old commit. Trigger a fresh build from a new commit on the configured production branch instead.
