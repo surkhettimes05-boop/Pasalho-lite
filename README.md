@@ -77,6 +77,7 @@ The product specification is split into focused documents:
 - [Production Operations Runbook](docs/OPERATIONS_RUNBOOK.md)
 - [Scanner & Printer Validation](docs/HARDWARE_VALIDATION.md)
 - [Production Release Checklist](docs/PRODUCTION_RELEASE_CHECKLIST.md)
+- [Cloudflare Workers Deployment](docs/CLOUDFLARE_DEPLOYMENT.md)
 
 ## V1 definition of done
 

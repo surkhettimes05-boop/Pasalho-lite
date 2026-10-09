@@ -1,0 +1,9 @@
+# Local Cloudflare preview only.
+# Copy to .dev.vars and replace every placeholder. Never commit .dev.vars.
+
+NODE_ENV="production"
+APP_ENV="staging"
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require"
+AUTH_SECRET="replace-with-a-unique-random-secret-at-least-48-characters"
+APP_URL="http://localhost:8787"
+SESSION_TTL_HOURS="12"

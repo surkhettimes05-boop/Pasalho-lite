@@ -1,6 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  createCustomerForOrderAction,
+  createCustomerOrderAction,
+  lookupCustomerForOrderAction,
+} from "@/app/(app)/orders/actions";
 
 type ProductOption = {
   id: string;
@@ -43,15 +48,9 @@ function newLine(): Line {
 export function CreateOrderForm({
   products,
   idempotencyKey,
-  action,
-  lookupCustomer,
-  createCustomer,
 }: {
   products: ProductOption[];
   idempotencyKey: string;
-  action: (formData: FormData) => void | Promise<void>;
-  lookupCustomer: (phone: string) => Promise<CustomerResult>;
-  createCustomer: (input: { phone: string; name: string }) => Promise<CustomerResult>;
 }) {
   const [lines, setLines] = useState<Line[]>([{ key: "initial", productKey: "", quantity: "1" }]);
   const [phone, setPhone] = useState("");
@@ -94,7 +93,7 @@ export function CreateOrderForm({
     setBusy(true);
     setMessage("");
     try {
-      const result = await lookupCustomer(phone);
+      const result = await lookupCustomerForOrderAction(phone);
       if (result.ok) {
         setCustomer(result.customer);
         setMessage("Customer selected.");
@@ -113,7 +112,7 @@ export function CreateOrderForm({
     if (!phone.trim()) return;
     setBusy(true);
     try {
-      const result = await createCustomer({ phone, name });
+      const result = await createCustomerForOrderAction({ phone, name });
       if (result.ok) {
         setCustomer(result.customer);
         setName("");
@@ -127,7 +126,7 @@ export function CreateOrderForm({
   }
 
   return (
-    <form action={action} className="receive-form">
+    <form action={createCustomerOrderAction} className="receive-form">
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
       <input type="hidden" name="customerId" value={customer?.id ?? ""} />
       <input type="hidden" name="lineCount" value={lines.length} />

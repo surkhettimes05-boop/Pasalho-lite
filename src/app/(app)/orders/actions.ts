@@ -53,8 +53,9 @@ function customerPayload(customer: {
     name: customer.name,
     active: customer.active,
     pointBalance: customer.loyaltyAccount?.pointBalance ?? 0,
-    spendRemainder:
-      customer.loyaltyAccount?.spendRemainder.toFixed(2) ?? "0.00",
+    spendRemainder: customer.loyaltyAccount
+      ? Number(customer.loyaltyAccount.spendRemainder.toString()).toFixed(2)
+      : "0.00",
   };
 }
 

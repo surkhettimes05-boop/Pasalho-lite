@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { Role } from "@/generated/prisma/client";
-import {
-  createCustomerForOrderAction,
-  createCustomerOrderAction,
-  lookupCustomerForOrderAction,
-} from "@/app/(app)/orders/actions";
 import { CreateOrderForm } from "@/components/create-order-form";
 import { requirePageRole } from "@/lib/auth/require-role";
 import { formatNepalDateTime } from "@/lib/time";
@@ -26,6 +21,13 @@ const errors: Record<string, string> = {
 function pageNumber(value: string | undefined) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function money(value: { toString: () => string }) {
+  const numeric = Number(value.toString());
+  return Number.isFinite(numeric)
+    ? `Rs ${numeric.toFixed(2)}`
+    : `Rs ${value.toString()}`;
 }
 
 export const dynamic = "force-dynamic";
@@ -66,9 +68,6 @@ export default async function OrdersPage({
         <CreateOrderForm
           products={catalog}
           idempotencyKey={randomUUID()}
-          action={createCustomerOrderAction}
-          lookupCustomer={lookupCustomerForOrderAction}
-          createCustomer={createCustomerForOrderAction}
         />
       </section>
 
@@ -112,7 +111,7 @@ export default async function OrdersPage({
                       <small>{order.phoneSnapshot}</small>
                     </td>
                     <td>{order.items.length}</td>
-                    <td>Rs {order.total.toFixed(2)}</td>
+                    <td>{money(order.total)}</td>
                     <td>{order.paymentStatus}</td>
                     <td>
                       <span className={`type-pill order-status-${order.status.toLowerCase()}`}>
