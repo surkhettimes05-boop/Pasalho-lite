@@ -24,8 +24,7 @@ export default async function DashboardPage() {
           <p className="eyebrow">Operations</p>
           <h2>Operations dashboard</h2>
           <p className="muted">
-            Today&apos;s sales, cash, fulfillment and inventory exceptions for{" "}
-            {today}.
+            Live operating summary for {today}.
           </p>
         </div>
         <Link className="secondary-light-button" href="/reports">
@@ -43,12 +42,12 @@ export default async function DashboardPage() {
           <article className="summary-card">
             <span>Net sales today</span>
             <strong>{money(report.netSales)}</strong>
-            <small>Gross sales − completed refunds</small>
+            <small>After completed refunds</small>
           </article>
           <article className="summary-card">
             <span>POS sales</span>
             <strong>{money(report.posSalesValue)}</strong>
-            <small>{report.posSalesCount} finalized receipt(s)</small>
+            <small>{String(report.posSalesCount)} finalized receipt(s)</small>
           </article>
           <article className="summary-card">
             <span>COD delivered</span>
@@ -61,221 +60,56 @@ export default async function DashboardPage() {
             <small>Cash POS + COD collections</small>
           </article>
           <article className="summary-card">
-            <span>QR / non-cash</span>
-            <strong>{money(report.qrCollected)}</strong>
-            <small>Collected today, outside drawer cash</small>
-          </article>
-          <article className="summary-card">
-            <span>Returns / refunds</span>
-            <strong>{money(report.refunds)}</strong>
-            <small>Completed refund value today</small>
-          </article>
-          <article className="summary-card">
             <span>Pending COD</span>
             <strong>{money(report.codPendingAmount)}</strong>
-            <small>{report.openCodCount} open order(s)</small>
-          </article>
-        </section>
-      ) : null}
-
-      {report.visibility.cash ? (
-        <section className="summary-grid">
-          <article className="summary-card">
-            <span>Expected drawer cash</span>
-            <strong>{money(report.expectedCash)}</strong>
-            <small>Based on cash activity today</small>
-          </article>
-          <article className="summary-card">
-            <span>Expenses today</span>
-            <strong>{money(report.expensesToday)}</strong>
-            <small>Expenses, payouts and approved cash-out</small>
-          </article>
-          <article className="summary-card">
-            <span>Latest cash variance</span>
-            <strong>
-              {report.latestDailyClose
-                ? money(report.latestDailyClose.variance)
-                : "No close yet"}
-            </strong>
-            <small>
-              {report.latestDailyClose
-                ? `${report.latestDailyClose.operatingDate
-                    .toISOString()
-                    .slice(0, 10)} · ${report.latestDailyClose.status}`
-                : "Daily close history is empty"}
-            </small>
+            <small>{String(report.openCodCount)} open order(s)</small>
           </article>
         </section>
       ) : null}
 
       <section className="summary-grid">
+        {report.visibility.cash ? (
+          <>
+            <article className="summary-card">
+              <span>Expected drawer cash</span>
+              <strong>{money(report.expectedCash)}</strong>
+              <small>Expected cash position today</small>
+            </article>
+            <article className="summary-card">
+              <span>Expenses today</span>
+              <strong>{money(report.expensesToday)}</strong>
+              <small>Recorded cash outflow</small>
+            </article>
+          </>
+        ) : null}
+
         {report.visibility.warehouseInventory ? (
           <article className="summary-card">
             <span>Warehouse stock value</span>
             <strong>{money(report.warehouseStockValue)}</strong>
-            <small>Physical on-hand × current cost price</small>
+            <small>Current on-hand value</small>
           </article>
         ) : null}
+
         {report.visibility.storeInventory ? (
           <article className="summary-card">
             <span>Store stock value</span>
             <strong>{money(report.storeStockValue)}</strong>
-            <small>Physical on-hand × current cost price</small>
+            <small>Current on-hand value</small>
           </article>
         ) : null}
+
         <article className="summary-card">
           <span>Low-stock rows</span>
-          <strong>{report.lowStockCount}</strong>
-          <small>Available ≤ configured minimum</small>
+          <strong>{String(report.lowStockCount)}</strong>
+          <small>Available at or below minimum</small>
         </article>
+
         {report.visibility.transfers ? (
           <article className="summary-card">
             <span>Open transfers</span>
-            <strong>{report.openTransferCount}</strong>
+            <strong>{String(report.openTransferCount)}</strong>
             <small>Draft, ready or dispatched</small>
-          </article>
-        ) : null}
-      </section>
-
-      <section className="dashboard-grid">
-        <article className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Inventory attention</p>
-              <h3>Low stock</h3>
-            </div>
-            <Link className="text-link" href="/inventory">
-              Inventory
-            </Link>
-          </div>
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Location</th>
-                  <th>SKU</th>
-                  <th>Available</th>
-                  <th>Minimum</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.lowStock.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="empty-cell">
-                      No low-stock rows.
-                    </td>
-                  </tr>
-                ) : (
-                  report.lowStock.map((row) => (
-                    <tr key={`${row.productId}-${row.locationId}`}>
-                      <td>{row.locationCode}</td>
-                      <td>
-                        <strong>{row.sku}</strong>
-                        <small>{row.productName}</small>
-                      </td>
-                      <td>{row.available.toString()}</td>
-                      <td>{row.minimum.toString()}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        {report.visibility.cod ? (
-          <article className="panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Fulfillment</p>
-                <h3>Open COD orders</h3>
-              </div>
-              <Link className="text-link" href="/orders">
-                Orders
-              </Link>
-            </div>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Order</th>
-                    <th>Customer</th>
-                    <th>Status</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.openCodOrders.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="empty-cell">
-                        No open COD orders.
-                      </td>
-                    </tr>
-                  ) : (
-                    report.openCodOrders.map((order) => (
-                      <tr key={order.id}>
-                        <td>
-                          <Link className="text-link" href={`/orders/${order.id}`}>
-                            {order.orderNumber}
-                          </Link>
-                        </td>
-                        <td>
-                          {order.customer.name ?? order.customer.phoneDisplay}
-                        </td>
-                        <td>{order.status}</td>
-                        <td>{money(order.total)}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </article>
-        ) : null}
-
-        {report.visibility.transfers ? (
-          <article className="panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Warehouse flow</p>
-                <h3>Open transfers</h3>
-              </div>
-              <Link className="text-link" href="/transfers">
-                Transfers
-              </Link>
-            </div>
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Transfer</th>
-                    <th>Route</th>
-                    <th>Status</th>
-                    <th>Items</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.openTransfers.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="empty-cell">
-                        No open transfers.
-                      </td>
-                    </tr>
-                  ) : (
-                    report.openTransfers.map((transfer) => (
-                      <tr key={transfer.id}>
-                        <td>{transfer.transferNumber}</td>
-                        <td>
-                          {transfer.fromLocation.code} → {transfer.toLocation.code}
-                        </td>
-                        <td>{transfer.status}</td>
-                        <td>{transfer.items.length}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
           </article>
         ) : null}
       </section>
@@ -283,15 +117,29 @@ export default async function DashboardPage() {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Reporting</p>
-            <h3>Need the detail behind these numbers?</h3>
+            <p className="eyebrow">Quick actions</p>
+            <h3>Continue operations</h3>
             <p className="muted">
-              Daily sales, payment split, SKU sales, inventory, movements,
-              transfers, COD, returns, cash variance, expenses and customers.
+              Open the operational screen you need. Detailed tables remain available
+              in their dedicated modules and reports.
             </p>
           </div>
-          <Link className="primary-button" href="/reports">
-            View reports
+        </div>
+        <div className="action-row">
+          <Link className="primary-button" href="/pos">
+            Open POS
+          </Link>
+          <Link className="secondary-light-button" href="/inventory">
+            Inventory
+          </Link>
+          <Link className="secondary-light-button" href="/orders">
+            Orders
+          </Link>
+          <Link className="secondary-light-button" href="/transfers">
+            Transfers
+          </Link>
+          <Link className="secondary-light-button" href="/daily-close">
+            Daily Close
           </Link>
         </div>
       </section>
