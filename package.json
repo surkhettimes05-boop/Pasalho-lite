@@ -40,7 +40,8 @@
     "react-dom": "19.3.0",
     "zod": "4.6.5",
     "csv-parse": "7.0.3",
-    "read-excel-file": "9.2.0"
+    "read-excel-file": "9.2.0",
+    "@prisma/adapter-neon": "7.10.0"
   },
   "devDependencies": {
     "@types/node": "22.18.0",
