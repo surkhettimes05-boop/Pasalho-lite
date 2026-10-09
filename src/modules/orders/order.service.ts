@@ -928,7 +928,7 @@ export async function getOrderCatalog() {
       barcode: product.barcode,
       name: product.name,
       unit: product.unit,
-      sellingPrice: product.sellingPrice.toFixed(2),
+      sellingPrice: Number(product.sellingPrice.toString()).toFixed(2),
       available: onHand.sub(reserved).toString(),
     };
   });
