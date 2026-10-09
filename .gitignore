@@ -29,3 +29,9 @@ pnpm-debug.log*
 # editor
 .vscode/
 .idea/
+
+# Cloudflare / OpenNext
+/.open-next
+/.wrangler
+.dev.vars
+cloudflare-env.d.ts
