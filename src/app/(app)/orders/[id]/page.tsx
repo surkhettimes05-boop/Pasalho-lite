@@ -34,6 +34,13 @@ const success: Record<string, string> = {
 
 export const dynamic = "force-dynamic";
 
+function money(value: { toString: () => string }) {
+  const numeric = Number(value.toString());
+  return Number.isFinite(numeric)
+    ? `Rs ${numeric.toFixed(2)}`
+    : `Rs ${value.toString()}`;
+}
+
 export default async function OrderDetailPage({
   params,
   searchParams,
@@ -55,7 +62,7 @@ export default async function OrderDetailPage({
 
   const whatsappDigits = order.customer.phoneNormalized.replace(/\D/g, "");
   const whatsappText = encodeURIComponent(
-    `Pasalho order ${order.orderNumber}: status ${order.status}, total Rs ${order.total.toFixed(2)}.`,
+    `Pasalho order ${order.orderNumber}: status ${order.status}, total ${money(order.total)}.`,
   );
   const whatsappHref = `https://wa.me/${whatsappDigits}?text=${whatsappText}`;
 
@@ -106,7 +113,7 @@ export default async function OrderDetailPage({
         <article className="summary-card">
           <span>COD payment</span>
           <strong>{payment.status}</strong>
-          <small>Rs {payment.amount.toFixed(2)}</small>
+          <small>{money(payment.amount)}</small>
         </article>
         <article className="summary-card">
           <span>Active reserved quantity</span>
@@ -161,8 +168,8 @@ export default async function OrderDetailPage({
                     <td>{item.skuSnapshot}</td>
                     <td>{item.productNameSnapshot}</td>
                     <td>{item.quantity.toString()}</td>
-                    <td>Rs {item.unitPrice.toFixed(2)}</td>
-                    <td>Rs {item.lineTotal.toFixed(2)}</td>
+                    <td>{money(item.unitPrice)}</td>
+                    <td>{money(item.lineTotal)}</td>
                     <td>{reservation?.status ?? "NONE"}</td>
                   </tr>
                 );
@@ -172,10 +179,10 @@ export default async function OrderDetailPage({
         </div>
 
         <div className="order-totals">
-          <div><span>Subtotal</span><strong>Rs {order.subtotal.toFixed(2)}</strong></div>
-          <div><span>Discount</span><strong>Rs {order.discountTotal.toFixed(2)}</strong></div>
-          <div><span>Delivery</span><strong>Rs {order.deliveryCharge.toFixed(2)}</strong></div>
-          <div className="receipt-total"><span>Total COD</span><strong>Rs {order.total.toFixed(2)}</strong></div>
+          <div><span>Subtotal</span><strong>{money(order.subtotal)}</strong></div>
+          <div><span>Discount</span><strong>{money(order.discountTotal)}</strong></div>
+          <div><span>Delivery</span><strong>{money(order.deliveryCharge)}</strong></div>
+          <div className="receipt-total"><span>Total COD</span><strong>{money(order.total)}</strong></div>
           {loyaltyTransaction ? (
             <div><span>Loyalty posted</span><strong>+{loyaltyTransaction.pointsDelta} point(s)</strong></div>
           ) : null}
