@@ -10,7 +10,12 @@ const baseEnvSchema = z.object({
 });
 
 export function parseEnv(input: Record<string, string | undefined>) {
-  const parsed = baseEnvSchema.parse(input);
+  const normalizedInput = {
+    ...input,
+    DATABASE_URL:
+      input.DATABASE_URL ?? input.database_DATABASE_URL ?? input.database_POSTGRES_URL,
+  };
+  const parsed = baseEnvSchema.parse(normalizedInput);
 
   if (!/^postgres(?:ql)?:\/\//i.test(parsed.DATABASE_URL)) {
     throw new Error("DATABASE_URL must use PostgreSQL.");
