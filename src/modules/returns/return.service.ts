@@ -559,6 +559,42 @@ export async function processReturn(
             include: returnInclude,
           });
 
+          // Only finalized POS sales generate POS reversal events. Customer web
+          // orders have their own commerce lifecycle and must not be double-reversed.
+          if (
+            source.sourceType === ReturnSourceType.SALE &&
+            source.customerId &&
+            !isRecovery &&
+            refundTotal.greaterThan(0)
+          ) {
+            const customer = await tx.customer.findUnique({
+              where: { id: source.customerId },
+              select: { phoneNormalized: true },
+            });
+            if (customer?.phoneNormalized) {
+              const customerPhoneHash = createHash("sha256")
+                .update(customer.phoneNormalized.replace(/^\\+977/, ""))
+                .digest("hex");
+              await tx.creatorAttributionOutbox.create({
+                data: {
+                  returnId: record.id,
+                  eventKey: `pos-return:${record.id}`,
+                  payload: {
+                    schemaVersion: 1,
+                    eventType: "POS_SALE_RETURNED",
+                    sourceSystem: "POS",
+                    sourceTransactionId: record.id,
+                    originalSourceTransactionId: source.id,
+                    sourceTransactionNumber: record.returnNumber,
+                    customerPhoneHash,
+                    refundAmountNpr: refundTotal.toFixed(2),
+                    completedAt: now.toISOString(),
+                  },
+                },
+              });
+            }
+          }
+
           for (const item of preparedItems) {
             if (!item.restockQuantity.greaterThan(0)) continue;
 
