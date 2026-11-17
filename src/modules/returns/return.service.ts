@@ -56,6 +56,7 @@ type SourceLine = {
   quantity: Prisma.Decimal;
   lineTotal: Prisma.Decimal;
   discountAmount: Prisma.Decimal;
+  unitCostSnapshot?: Prisma.Decimal | null;
 };
 
 type LoadedSource =
@@ -539,6 +540,14 @@ export async function processReturn(
 
           const now = new Date();
           const kind = isRecovery ? ReturnKind.RECOVERY : ReturnKind.REFUND;
+          const hasCompletePosCost = source.sourceType === ReturnSourceType.SALE &&
+            source.lines.every((line) => line.unitCostSnapshot != null);
+          const reversedCogs = hasCompletePosCost
+            ? preparedItems.reduce((sum, item) => {
+                const originalLine = lineById.get(item.originalLineId)!;
+                return sum.add(originalLine.unitCostSnapshot!.mul(item.quantity));
+              }, new Prisma.Decimal(0))
+            : null;
           const record = await tx.returnRecord.create({
             data: {
               returnNumber: buildReturnNumber(now),
@@ -588,6 +597,8 @@ export async function processReturn(
                     sourceTransactionNumber: record.returnNumber,
                     customerPhoneHash,
                     refundAmountNpr: refundTotal.toFixed(2),
+                    reversedCogsNpr: reversedCogs?.toFixed(2) ?? null,
+                    costStatus: reversedCogs ? "VERIFIED" : "UNKNOWN",
                     completedAt: now.toISOString(),
                   },
                 },
