@@ -335,7 +335,7 @@ async function finalizeSaleTransaction(
       if (sale.customerId && sale.customer?.phoneNormalized) {
         const phoneDigest = await crypto.subtle.digest(
           "SHA-256",
-          new TextEncoder().encode(sale.customer.phoneNormalized),
+          new TextEncoder().encode(sale.customer.phoneNormalized.replace(/^\\+977/, "")),
         );
         const customerPhoneHash = Array.from(new Uint8Array(phoneDigest))
           .map((byte) => byte.toString(16).padStart(2, "0"))
