@@ -598,7 +598,7 @@ export async function processReturn(
                     customerPhoneHash,
                     refundAmountNpr: refundTotal.toFixed(2),
                     reversedCogsNpr: reversedCogs?.toFixed(2) ?? null,
-                    costStatus: reversedCogs ? "VERIFIED" : "UNKNOWN",
+                    costStatus: reversedCogs !== null ? "VERIFIED" : "UNKNOWN",
                     completedAt: now.toISOString(),
                   },
                 },
