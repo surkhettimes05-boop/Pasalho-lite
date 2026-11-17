@@ -9,7 +9,7 @@ import { assertRole } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
-import { recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
+import { applyInboundAverageUnitCost, recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
 import {
   createTransferInputSchema,
   dispatchTransferInputSchema,
@@ -560,16 +560,6 @@ export async function receiveTransfer(
           const previousQuantity = destinationBalance?.onHand ?? new Prisma.Decimal(0);
           const previousAverageCost = destinationBalance?.averageUnitCost ?? null;
           const incomingUnitCost = item.unitCostSnapshot;
-          const nextAverageCost = previousQuantity.isZero()
-            ? incomingUnitCost
-            : previousAverageCost === null || incomingUnitCost === null
-              ? null
-              : previousQuantity
-                  .mul(previousAverageCost)
-                  .add(received.mul(incomingUnitCost))
-                  .div(previousQuantity.add(received))
-                  .toDecimalPlaces(2);
-
           await recordPhysicalInventoryMovement(tx, {
             productId: item.productId,
             locationId: transfer.toLocationId,
@@ -582,14 +572,13 @@ export async function receiveTransfer(
             actorUserId: actor.id,
           });
 
-          await tx.stockBalance.update({
-            where: {
-              productId_locationId: {
-                productId: item.productId,
-                locationId: transfer.toLocationId,
-              },
-            },
-            data: { averageUnitCost: nextAverageCost },
+          await applyInboundAverageUnitCost(tx, {
+            productId: item.productId,
+            locationId: transfer.toLocationId,
+            previousQuantity,
+            previousAverageUnitCost: previousAverageCost,
+            incomingQuantity: received,
+            incomingUnitCost,
           });
         }
 
