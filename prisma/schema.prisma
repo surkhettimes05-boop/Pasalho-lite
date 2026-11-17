@@ -4,6 +4,15 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
+// Node.js-only client for Vitest. Production Worker code keeps the Cloudflare client.
+generator nodeClient {
+  provider            = "prisma-client"
+  runtime             = "nodejs"
+  output              = "../src/generated/prisma-node"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
 datasource db {
   provider = "postgresql"
 }
