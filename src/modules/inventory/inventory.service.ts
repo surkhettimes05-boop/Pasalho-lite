@@ -553,3 +553,42 @@ export async function changeInventoryReserved(
     },
   };
 }
+
+
+export async function applyInboundAverageUnitCost(
+  tx: Prisma.TransactionClient,
+  input: {
+    productId: string;
+    locationId: string;
+    previousQuantity: Prisma.Decimal;
+    previousAverageUnitCost: Prisma.Decimal | null;
+    incomingQuantity: Prisma.Decimal;
+    incomingUnitCost: Prisma.Decimal | null;
+  },
+) {
+  if (!input.incomingQuantity.greaterThan(0)) {
+    return input.previousAverageUnitCost;
+  }
+
+  const nextAverageUnitCost = input.previousQuantity.isZero()
+    ? input.incomingUnitCost
+    : input.previousAverageUnitCost === null || input.incomingUnitCost === null
+      ? null
+      : input.previousQuantity
+          .mul(input.previousAverageUnitCost)
+          .add(input.incomingQuantity.mul(input.incomingUnitCost))
+          .div(input.previousQuantity.add(input.incomingQuantity))
+          .toDecimalPlaces(2);
+
+  await tx.stockBalance.update({
+    where: {
+      productId_locationId: {
+        productId: input.productId,
+        locationId: input.locationId,
+      },
+    },
+    data: { averageUnitCost: nextAverageUnitCost },
+  });
+
+  return nextAverageUnitCost;
+}
