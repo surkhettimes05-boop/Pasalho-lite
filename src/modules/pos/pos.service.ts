@@ -225,7 +225,7 @@ async function finalizeSaleTransaction(
         unitPrice: Prisma.Decimal;
         discountAmount: Prisma.Decimal;
         lineTotal: Prisma.Decimal;
-        unitCostSnapshot: Prisma.Decimal;
+        unitCostSnapshot: Prisma.Decimal | null;
       }> = [];
 
       for (const commandItem of parsed.items) {
@@ -263,19 +263,24 @@ async function finalizeSaleTransaction(
           unitPrice,
           discountAmount: new Prisma.Decimal(0),
           lineTotal,
-          unitCostSnapshot: product.costPrice,
+          unitCostSnapshot: balance?.averageUnitCost ?? null,
         });
       }
 
       subtotal = subtotal.toDecimalPlaces(2);
       const discountTotal = new Prisma.Decimal(0);
       const total = subtotal.sub(discountTotal);
-      const costOfGoods = preparedItems
-        .reduce(
-          (sum, item) => sum.add(item.unitCostSnapshot.mul(item.quantity)),
-          new Prisma.Decimal(0),
-        )
-        .toDecimalPlaces(2);
+      const costEvidenceComplete = preparedItems.every(
+        (item) => item.unitCostSnapshot !== null,
+      );
+      const costOfGoods = costEvidenceComplete
+        ? preparedItems
+            .reduce(
+              (sum, item) => sum.add(item.unitCostSnapshot!.mul(item.quantity)),
+              new Prisma.Decimal(0),
+            )
+            .toDecimalPlaces(2)
+        : null;
       const now = new Date();
 
       const sale = await tx.sale.create({
@@ -360,8 +365,8 @@ async function finalizeSaleTransaction(
               customerPhoneHash,
               currency: "NPR",
               eligibleSpendNpr: total.toFixed(2),
-              costOfGoodsNpr: costOfGoods.toFixed(2),
-              costEvidenceStatus: "AVAILABLE",
+              costOfGoodsNpr: costOfGoods?.toFixed(2) ?? null,
+              costEvidenceStatus: costEvidenceComplete ? "AVAILABLE" : "MISSING_COST",
               completedAt: now.toISOString(),
             },
           },
