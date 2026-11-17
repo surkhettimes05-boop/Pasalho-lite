@@ -462,9 +462,11 @@ export async function recordPhysicalInventoryMovement(
       locationId: input.locationId,
       onHand: nextOnHand,
       reserved: currentReserved,
+      averageUnitCost: null,
     },
     update: {
       onHand: nextOnHand,
+      ...(input.quantityDelta.greaterThan(0) ? { averageUnitCost: null } : {}),
     },
   });
 
