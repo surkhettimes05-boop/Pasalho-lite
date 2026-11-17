@@ -12,6 +12,7 @@ import {
   findCustomerByPhone,
 } from "@/modules/customers/customer.service";
 import { finalizeSale } from "@/modules/pos/pos.service";
+import { dispatchCreatorAttributionOutbox } from "@/modules/creator-attribution/outbox.service";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "");
@@ -157,6 +158,9 @@ export async function finalizeSaleAction(formData: FormData) {
   } catch (error) {
     redirect(`/pos?error=${encodeURIComponent(operationError(error))}`);
   }
+
+  // Delivery is best-effort: the committed POS sale must never depend on commerce uptime.
+  await dispatchCreatorAttributionOutbox().catch(() => undefined);
 
   revalidatePath("/pos");
   revalidatePath("/customers");
