@@ -132,6 +132,22 @@ enum DailyCloseStatus {
   REOPENED
 }
 
+model CreatorAttributionOutbox {
+  id             String   @id @default(uuid())
+  saleId         String   @unique
+  eventKey       String   @unique
+  payload        Json
+  status         String   @default("PENDING")
+  attemptCount   Int      @default(0)
+  nextAttemptAt  DateTime @default(now())
+  lastErrorCode  String?
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+}
+
 model User {
   id                  String               @id @default(uuid())
   name                String
