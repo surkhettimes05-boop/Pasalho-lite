@@ -150,12 +150,27 @@ storeBalance = await prisma.stockBalance.findUniqueOrThrow({
 });
 eq(storeBalance.onHand.toString(), "20", "store after transfer receive");
 
-await finalizeSale(cashier, {
+const posDigits = suffix.replace(/\D/g, "").padEnd(8, "5").slice(0, 8);
+const posCustomer = await createCustomer(cashier, {
+  phone: `98${posDigits}`,
+  name: "Canonical POS Attribution Customer",
+  notes: "",
+});
+
+const posSale = await finalizeSale(cashier, {
   idempotencyKey: `e2e-pos-${suffix}`,
   paymentMethod: PaymentMethod.CASH,
-  customerId: null,
+  customerId: posCustomer.id,
   items: [{ productId: product.id, quantity: "3" }],
 });
+
+const posCreatorOutbox = await prisma.creatorAttributionOutbox.findUnique({
+  where: { saleId: posSale.id },
+});
+assert(posCreatorOutbox, "customer-linked POS sale creates creator attribution outbox event");
+const posCreatorPayload = posCreatorOutbox.payload as Record<string, unknown>;
+eq(String(posCreatorPayload.costOfGoodsNpr), "300.00", "POS creator outbox COGS snapshot");
+eq(String(posCreatorPayload.costEvidenceStatus), "AVAILABLE", "POS creator cost evidence status");
 
 storeBalance = await prisma.stockBalance.findUniqueOrThrow({
   where: {
