@@ -118,9 +118,11 @@ export async function adjustInventory(
           locationId: parsed.locationId,
           onHand: nextOnHand,
           reserved: currentReserved,
+          averageUnitCost: null,
         },
         update: {
           onHand: nextOnHand,
+          ...(delta.greaterThan(0) ? { averageUnitCost: null } : {}),
         },
       });
 
