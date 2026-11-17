@@ -165,7 +165,7 @@ const posSale = await finalizeSale(cashier, {
 });
 
 const posCreatorOutbox = await prisma.creatorAttributionOutbox.findUnique({
-  where: { saleId: posSale.id },
+  where: { saleId: posSale.sale.id },
 });
 assert(posCreatorOutbox, "customer-linked POS sale creates creator attribution outbox event");
 const posCreatorPayload = posCreatorOutbox.payload as Record<string, unknown>;
