@@ -332,6 +332,34 @@ async function finalizeSaleTransaction(
           })
         : null;
 
+      if (sale.customerId && sale.customer?.phoneNormalized) {
+        const phoneDigest = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(sale.customer.phoneNormalized),
+        );
+        const customerPhoneHash = Array.from(new Uint8Array(phoneDigest))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+
+        await tx.creatorAttributionOutbox.create({
+          data: {
+            saleId: sale.id,
+            eventKey: `pos-sale:${sale.id}`,
+            payload: {
+              schemaVersion: 1,
+              eventType: "POS_SALE_COMPLETED",
+              sourceSystem: "POS",
+              sourceTransactionId: sale.id,
+              sourceTransactionNumber: sale.receiptNumber,
+              customerPhoneHash,
+              currency: "NPR",
+              eligibleSpendNpr: total.toFixed(2),
+              completedAt: now.toISOString(),
+            },
+          },
+        });
+      }
+
       await tx.auditLog.create({
         data: {
           actorUserId: actor.id,
