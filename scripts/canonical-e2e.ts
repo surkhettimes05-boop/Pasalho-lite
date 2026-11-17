@@ -4,8 +4,8 @@ import {
   PaymentMethod,
   PrismaClient,
   Role,
-} from "../src/generated/prisma/client";
-import { prisma } from "../src/lib/db";
+} from "../src/generated/prisma-node/client";
+import { prisma } from "../src/lib/db-node";
 import { getNepalOperatingDateKey } from "../src/lib/time";
 import { recordCashMovement } from "../src/modules/cash/cash.service";
 import { createCustomer } from "../src/modules/customers/customer.service";
