@@ -55,7 +55,7 @@
     "vitest": "5.0.3",
     "vite": "7.1.5",
     "@opennextjs/cloudflare": "1.20.17",
-    "wrangler": "4.127.1"
+    "wrangler": "^4.163.0"
   },
   "overrides": {
     "deepmerge-ts": "8.0.0",
