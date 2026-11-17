@@ -111,6 +111,7 @@ await markTransferReady(warehouse, transfer.id);
 const dispatchedTransfer = await dispatchTransfer(warehouse, transfer.id, {
   idempotencyKey: `e2e-transfer-dispatch-${suffix}`,
 });
+eq(dispatchedTransfer.items[0].unitCostSnapshot?.toFixed(2) ?? "MISSING", "100.00", "transfer cost snapshot");
 
 warehouseBalance = await prisma.stockBalance.findUniqueOrThrow({
   where: {
@@ -149,6 +150,7 @@ storeBalance = await prisma.stockBalance.findUniqueOrThrow({
   },
 });
 eq(storeBalance.onHand.toString(), "20", "store after transfer receive");
+eq(storeBalance.averageUnitCost?.toFixed(2) ?? "MISSING", "100.00", "store moving-average cost after transfer");
 
 const posDigits = suffix.replace(/\D/g, "").padEnd(8, "5").slice(0, 8);
 const posCustomer = await createCustomer(cashier, {
@@ -164,6 +166,7 @@ const posSale = await finalizeSale(cashier, {
   items: [{ productId: product.id, quantity: "3" }],
 });
 
+eq(posSale.sale.items[0].unitCostSnapshot?.toFixed(2) ?? "MISSING", "100.00", "POS sale-time unit cost snapshot");
 const posCreatorOutbox = await prisma.creatorAttributionOutbox.findUnique({
   where: { saleId: posSale.sale.id },
 });
