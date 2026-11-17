@@ -354,6 +354,10 @@ async function finalizeSaleTransaction(
               customerPhoneHash,
               currency: "NPR",
               eligibleSpendNpr: total.toFixed(2),
+              costStatus: sale.items.every((item) => item.unitCostSnapshot !== null) ? "VERIFIED" : "UNKNOWN",
+              cogsNpr: sale.items.every((item) => item.unitCostSnapshot !== null)
+                ? sale.items.reduce((sum, item) => sum.add(item.unitCostSnapshot!.mul(item.quantity)), new Prisma.Decimal(0)).toFixed(2)
+                : null,
               completedAt: now.toISOString(),
             },
           },

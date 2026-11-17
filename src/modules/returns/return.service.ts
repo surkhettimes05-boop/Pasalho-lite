@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   CustomerOrderStatus,
   InventoryMovementType,
@@ -56,6 +57,7 @@ type SourceLine = {
   quantity: Prisma.Decimal;
   lineTotal: Prisma.Decimal;
   discountAmount: Prisma.Decimal;
+  unitCostSnapshot?: Prisma.Decimal | null;
 };
 
 type LoadedSource =
@@ -539,6 +541,14 @@ export async function processReturn(
 
           const now = new Date();
           const kind = isRecovery ? ReturnKind.RECOVERY : ReturnKind.REFUND;
+          const hasCompletePosCost = source.sourceType === ReturnSourceType.SALE &&
+            source.lines.every((line) => line.unitCostSnapshot != null);
+          const reversedCogs = hasCompletePosCost
+            ? preparedItems.reduce((sum, item) => {
+                const originalLine = lineById.get(item.originalLineId)!;
+                return sum.add(originalLine.unitCostSnapshot!.mul(item.quantity));
+              }, new Prisma.Decimal(0))
+            : null;
           const record = await tx.returnRecord.create({
             data: {
               returnNumber: buildReturnNumber(now),
@@ -558,6 +568,44 @@ export async function processReturn(
             },
             include: returnInclude,
           });
+
+          // Only finalized POS sales generate POS reversal events. Customer web
+          // orders have their own commerce lifecycle and must not be double-reversed.
+          if (
+            source.sourceType === ReturnSourceType.SALE &&
+            source.customerId &&
+            !isRecovery &&
+            refundTotal.greaterThan(0)
+          ) {
+            const customer = await tx.customer.findUnique({
+              where: { id: source.customerId },
+              select: { phoneNormalized: true },
+            });
+            if (customer?.phoneNormalized) {
+              const customerPhoneHash = createHash("sha256")
+                .update(customer.phoneNormalized.replace(/^\\+977/, ""))
+                .digest("hex");
+              await tx.creatorAttributionOutbox.create({
+                data: {
+                  returnId: record.id,
+                  eventKey: `pos-return:${record.id}`,
+                  payload: {
+                    schemaVersion: 1,
+                    eventType: "POS_SALE_RETURNED",
+                    sourceSystem: "POS",
+                    sourceTransactionId: record.id,
+                    originalSourceTransactionId: source.id,
+                    sourceTransactionNumber: record.returnNumber,
+                    customerPhoneHash,
+                    refundAmountNpr: refundTotal.toFixed(2),
+                    reversedCogsNpr: reversedCogs?.toFixed(2) ?? null,
+                    costStatus: reversedCogs !== null ? "VERIFIED" : "UNKNOWN",
+                    completedAt: now.toISOString(),
+                  },
+                },
+              });
+            }
+          }
 
           for (const item of preparedItems) {
             if (!item.restockQuantity.greaterThan(0)) continue;

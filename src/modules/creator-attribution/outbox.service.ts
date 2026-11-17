@@ -50,10 +50,13 @@ export async function dispatchCreatorAttributionOutbox(limit = 20) {
     const payload = event.payload as OutboxPayload;
     const body = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();
+    const targetEndpoint = payload.eventType === "POS_SALE_RETURNED"
+      ? endpoint.replace(/\/pos-sales\/?$/, "/pos-returns")
+      : endpoint;
 
     try {
       const signature = await signBody(secret, timestamp, body);
-      const response = await fetch(endpoint, {
+      const response = await fetch(targetEndpoint, {
         method: "POST",
         headers: {
           "content-type": "application/json",
