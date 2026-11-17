@@ -51,7 +51,7 @@ export async function dispatchCreatorAttributionOutbox(limit = 20) {
     const body = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const targetEndpoint = payload.eventType === "POS_SALE_RETURNED"
-      ? endpoint.replace(/\\/pos-sales\\/?$/, "/pos-returns")
+      ? endpoint.replace(/\/pos-sales\/?$/, "/pos-returns")
       : endpoint;
 
     try {
