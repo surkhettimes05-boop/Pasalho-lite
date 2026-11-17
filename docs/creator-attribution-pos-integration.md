@@ -10,7 +10,7 @@ Pasalho Lite remains the source of truth for physical POS sales, payment collect
 - A background/dispatch action sends the event to the central commerce attribution endpoint over HTTPS with HMAC-SHA256 request signing.
 - Delivery is at-least-once; central commerce API deduplicates by source system + transaction ID.
 - Failed delivery increments attempt count and schedules exponential retry. It must never roll back or block a finalized POS sale.
-- POS returns emit separate signed reversal events tied to original sale and refund amount. They must not edit the original outbox event.
+- Returns/reversals are **not implemented in this PR**. Do not approve or settle creator rewards for returned/refunded sales until a separate signed return-adjustment outbox and central reward-reversal flow is shipped.
 - The outbox is operational integration evidence, not a second reward ledger.
 
 ## Required configuration
@@ -26,4 +26,4 @@ If either is missing, POS sales continue normally and outbox events remain pendi
 - Commerce API timeout does not fail POS sale.
 - Retry sends same event key and payload.
 - Server rejects invalid HMAC, stale timestamp and altered payload.
-- Refund creates a compensating event; original event remains immutable.
+- Refund/reversal handling is a required follow-up acceptance gate before creator reward settlement is enabled in production.
