@@ -114,6 +114,13 @@ async function payment() {
 
 describe("Phase 7 POS returns and refunds", () => {
   it("starts from finalized sale with stock 8 and loyalty 2 points / Rs 200 remainder", async () => {
+    const saleOutbox = await prisma.creatorAttributionOutbox.findUniqueOrThrow({
+      where: { saleId },
+    });
+    const salePayload = saleOutbox.payload as Record<string, unknown>;
+    expect(salePayload.costStatus).toBe("VERIFIED");
+    expect(salePayload.cogsNpr).toBe("600.00");
+
     const balance = await stock();
     expect(balance.onHand.toString()).toBe("8");
 
@@ -155,6 +162,8 @@ describe("Phase 7 POS returns and refunds", () => {
     expect(returnPayload.originalSourceTransactionId).toBe(saleId);
     expect(returnPayload.customerPhoneHash).toBe(expectedPhoneHash);
     expect(returnPayload.refundAmountNpr).toBe("600.00");
+    expect(returnPayload.reversedCogsNpr).toBe("300.00");
+    expect(returnPayload.costStatus).toBe("VERIFIED");
 
     expect(result.kind).toBe(ReturnKind.REFUND);
     expect(result.refundAmount.toFixed(2)).toBe("600.00");
