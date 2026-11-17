@@ -270,6 +270,12 @@ async function finalizeSaleTransaction(
       subtotal = subtotal.toDecimalPlaces(2);
       const discountTotal = new Prisma.Decimal(0);
       const total = subtotal.sub(discountTotal);
+      const costOfGoods = preparedItems
+        .reduce(
+          (sum, item) => sum.add(item.unitCostSnapshot.mul(item.quantity)),
+          new Prisma.Decimal(0),
+        )
+        .toDecimalPlaces(2);
       const now = new Date();
 
       const sale = await tx.sale.create({
@@ -354,6 +360,8 @@ async function finalizeSaleTransaction(
               customerPhoneHash,
               currency: "NPR",
               eligibleSpendNpr: total.toFixed(2),
+              costOfGoodsNpr: costOfGoods.toFixed(2),
+              costEvidenceStatus: "AVAILABLE",
               completedAt: now.toISOString(),
             },
           },
