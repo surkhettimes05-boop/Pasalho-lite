@@ -27,3 +27,9 @@ If either is missing, POS sales continue normally and outbox events remain pendi
 - Retry sends same event key and payload.
 - Server rejects invalid HMAC, stale timestamp and altered payload.
 - Refund/reversal handling is a required follow-up acceptance gate before creator reward settlement is enabled in production.
+
+## POS COGS evidence
+
+POS COGS is calculated from the store location's moving weighted-average unit cost at the time of sale. Purchase receipts update the warehouse average; dispatch snapshots that average onto each transfer item; receiving updates the store average. The POS sale snapshots the store average onto each sale item and multiplies it by quantity.
+
+If any sold item has no verified location average cost, the outbox sends `costEvidenceStatus: "MISSING_COST"` and a null cost. The central profitability dashboard must not infer cost from the product's catalog `costPrice`.
