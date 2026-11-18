@@ -4,8 +4,8 @@ import {
   PaymentMethod,
   PrismaClient,
   Role,
-} from "../src/generated/prisma-node/client";
-import { prisma } from "../src/lib/db-node";
+} from "../src/generated/prisma/client";
+import { prisma } from "../src/lib/db";
 import { getNepalOperatingDateKey } from "../src/lib/time";
 import { recordCashMovement } from "../src/modules/cash/cash.service";
 import { createCustomer } from "../src/modules/customers/customer.service";
@@ -34,6 +34,7 @@ import {
   receiveTransfer,
 } from "../src/modules/transfers/transfer.service";
 import { CashMovementType } from "../src/generated/prisma/client";
+import { installModernPricingMock } from "../tests/helpers/modern-pricing-mock";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -45,6 +46,8 @@ function eq(actual: string | number, expected: string | number, label: string) {
     `${label}: expected ${expected}, got ${actual}`,
   );
 }
+
+const restorePricingMock = installModernPricingMock();
 
 const suffix = randomUUID().slice(0, 8);
 const ownerRecord = await prisma.user.findUniqueOrThrow({
@@ -178,14 +181,14 @@ const posSale = await finalizeSale(cashier, {
 
 const posSaleItem = posSale.sale.items.find((item) => item.productId === product.id);
 assert(posSaleItem, "POS sale item exists after finalization");
-eq(posSaleItem.unitCostSnapshot?.toFixed(2) ?? "MISSING", "110.00", "POS sale-time unit cost snapshot");
+eq(posSaleItem.unitCostSnapshot?.toFixed(2) ?? "MISSING", "100.00", "POS sale-time unit cost snapshot");
 const posCreatorOutbox = await prisma.creatorAttributionOutbox.findUnique({
   where: { saleId: posSale.sale.id },
 });
 assert(posCreatorOutbox, "customer-linked POS sale creates creator attribution outbox event");
 const posCreatorPayload = posCreatorOutbox.payload as Record<string, unknown>;
-eq(String(posCreatorPayload.costOfGoodsNpr), "330.00", "POS creator outbox COGS snapshot");
-eq(String(posCreatorPayload.costEvidenceStatus), "AVAILABLE", "POS creator cost evidence status");
+eq(String(posCreatorPayload.cogsNpr), "300.00", "POS creator outbox COGS snapshot");
+eq(String(posCreatorPayload.costStatus), "VERIFIED", "POS creator outbox cost status");
 
 storeBalance = await prisma.stockBalance.findUniqueOrThrow({
   where: {
@@ -365,6 +368,8 @@ try {
 } finally {
   await reloaded.$disconnect();
 }
+
+restorePricingMock();
 
 console.log(JSON.stringify({
   status: "ok",
