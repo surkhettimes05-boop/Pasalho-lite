@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   PaymentMethod,
@@ -119,6 +119,13 @@ async function payment() {
 
 describe("Phase 7 POS returns and refunds", () => {
   it("starts from finalized sale with stock 8 and loyalty 2 points / Rs 200 remainder", async () => {
+    const saleOutbox = await prisma.creatorAttributionOutbox.findUniqueOrThrow({
+      where: { saleId },
+    });
+    const salePayload = saleOutbox.payload as Record<string, unknown>;
+    expect(salePayload.costStatus).toBe("VERIFIED");
+    expect(salePayload.cogsNpr).toBe("600.00");
+
     const balance = await stock();
     expect(balance.onHand.toString()).toBe("8");
 
@@ -146,6 +153,22 @@ describe("Phase 7 POS returns and refunds", () => {
     });
 
     firstReturnId = result.id;
+
+    const returnOutbox = await prisma.creatorAttributionOutbox.findUniqueOrThrow({
+      where: { returnId: firstReturnId },
+    });
+    const returnPayload = returnOutbox.payload as Record<string, unknown>;
+    const customer = await prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
+    const expectedPhoneHash = createHash("sha256")
+      .update(customer.phoneNormalized.replace(/^\\+977/, ""))
+      .digest("hex");
+    expect(returnOutbox.eventKey).toBe(`pos-return:${firstReturnId}`);
+    expect(returnPayload.eventType).toBe("POS_SALE_RETURNED");
+    expect(returnPayload.originalSourceTransactionId).toBe(saleId);
+    expect(returnPayload.customerPhoneHash).toBe(expectedPhoneHash);
+    expect(returnPayload.refundAmountNpr).toBe("600.00");
+    expect(returnPayload.reversedCogsNpr).toBe("300.00");
+    expect(returnPayload.costStatus).toBe("VERIFIED");
 
     expect(result.kind).toBe(ReturnKind.REFUND);
     expect(result.refundAmount.toFixed(2)).toBe("600.00");
@@ -197,6 +220,7 @@ describe("Phase 7 POS returns and refunds", () => {
     expect(replay.id).toBe(firstReturnId);
     expect((await stock()).onHand.toString()).toBe("9");
     expect((await payment()).refundedAmount.toFixed(2)).toBe("600.00");
+    expect(await prisma.creatorAttributionOutbox.count({ where: { returnId: firstReturnId } })).toBe(1);
 
     expect(
       await prisma.returnRecord.count({

@@ -135,7 +135,8 @@ enum DailyCloseStatus {
 
 model CreatorAttributionOutbox {
   id             String   @id @default(uuid())
-  saleId         String   @unique
+  saleId         String?  @unique
+  returnId       String?  @unique
   eventKey       String   @unique
   payload        Json
   status         String   @default("PENDING")
