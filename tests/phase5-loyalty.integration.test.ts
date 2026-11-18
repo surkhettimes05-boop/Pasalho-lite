@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   LoyaltySourceType,
   LoyaltyTransactionType,
@@ -17,6 +17,7 @@ import {
   normalizeCustomerPhone,
 } from "@/modules/customers/customer.service";
 import {
+  applyEligibleSpend,
   applyEligibleSpendReversal,
   reconcileLoyaltyAccount,
 } from "@/modules/loyalty/loyalty.service";
@@ -24,6 +25,7 @@ import { finalizeSale } from "@/modules/pos/pos.service";
 import { createProduct } from "@/modules/products/product.service";
 import { postPurchaseReceipt } from "@/modules/receiving/receipt.service";
 import { createSupplier } from "@/modules/receiving/supplier.service";
+import { installModernPricingMock } from "./helpers/modern-pricing-mock";
 import {
   createTransfer,
   dispatchTransfer,
@@ -45,8 +47,10 @@ let customerAId: string;
 let customerBId: string;
 let customerCId: string;
 let secondSaleId: string;
+let restorePricingMock: (() => void) | undefined;
 
 beforeAll(async () => {
+  restorePricingMock = installModernPricingMock();
   const ownerRecord = await prisma.user.findUniqueOrThrow({
     where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
   });
@@ -152,6 +156,8 @@ beforeAll(async () => {
   customerBId = customerB.id;
   customerCId = customerC.id;
 });
+
+afterAll(() => restorePricingMock?.());
 
 async function account(customerId: string) {
   return prisma.loyaltyAccount.findUniqueOrThrow({
@@ -344,6 +350,54 @@ describe("Phase 5 customers and loyalty", () => {
         },
       }),
     ).toBe(0);
+  });
+
+  it("cuts over loyalty to historical-only mode without mutating the ledger", async () => {
+    const original = process.env.LOYALTY_EARN_ENABLED;
+    process.env.LOYALTY_EARN_ENABLED = "false";
+
+    try {
+      const result = await finalizeSale(cashier, {
+        idempotencyKey: `phase5-cutover-${suffix}`,
+        paymentMethod: PaymentMethod.QR_NON_CASH,
+        customerId: customerAId,
+        items: [
+          {
+            productId,
+            quantity: "3",
+          },
+        ],
+      });
+
+      expect(result.sale.customerId).toBe(customerAId);
+      expect(result.loyaltyTransaction).toBeNull();
+      expect(
+        await prisma.loyaltyTransaction.count({
+          where: {
+            sourceType: LoyaltySourceType.SALE,
+            sourceId: result.sale.id,
+          },
+        }),
+      ).toBe(0);
+
+      await expect(
+        prisma.$transaction((tx) =>
+          applyEligibleSpend(tx, {
+            customerId: customerAId,
+            eligibleSpend: new Prisma.Decimal("100.00"),
+            sourceType: LoyaltySourceType.SALE,
+            sourceId: result.sale.id,
+            idempotencyKey: `phase5-cutover-earn-${suffix}`,
+            actorUserId: owner.id,
+            reason: "Cutover bypass attempt",
+          }),
+        ),
+      ).rejects.toMatchObject<Partial<BusinessError>>({
+        code: "LOYALTY_DISABLED",
+      });
+    } finally {
+      process.env.LOYALTY_EARN_ENABLED = original ?? "true";
+    }
   });
 
   it("reversal crosses thresholds backward using net eligible spend", async () => {

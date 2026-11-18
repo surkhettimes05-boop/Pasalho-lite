@@ -4,9 +4,37 @@ import { Role } from "@/generated/prisma/client";
 import { PrintReceiptButton } from "@/components/print-receipt-button";
 import { requirePageRole } from "@/lib/auth/require-role";
 import { formatNepalDateTime } from "@/lib/time";
+import { isLoyaltyEarningEnabled } from "@/modules/loyalty/loyalty.service";
 import { getSaleById } from "@/modules/pos/pos.service";
 
 export const dynamic = "force-dynamic";
+
+function maskPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  return `****${digits.slice(-4)}`;
+}
+
+function membershipTierLabel(tier: string | null) {
+  if (tier === "FOUNDING_1000") return "Founding 1,000";
+  if (tier === "REGISTERED_MEMBER") return "Registered member";
+  return "No membership";
+}
+
+function membershipStatusLabel(status: string) {
+  return status === "NOT_MEMBER" ? "not a member" : status.toLowerCase();
+}
+
+function promotionLabel(snapshot: unknown, reference: string | null) {
+  if (
+    snapshot &&
+    typeof snapshot === "object" &&
+    "name" in snapshot &&
+    typeof snapshot.name === "string"
+  ) {
+    return snapshot.name;
+  }
+  return reference;
+}
 
 export default async function PosReceiptPage({
   params,
@@ -19,6 +47,7 @@ export default async function PosReceiptPage({
   const { id } = await params;
   const query = await searchParams;
   const result = await getSaleById(id);
+  const loyaltyEnabled = isLoyaltyEarningEnabled();
 
   if (!result || !result.payment) {
     notFound();
@@ -50,7 +79,9 @@ export default async function PosReceiptPage({
       {query.success === "finalized" ? (
         <p className="success-message no-print" role="status">
           Sale finalized, payment recorded, stock deducted
-          {sale.customerId ? ", and loyalty updated." : "."}
+          {sale.customerId && loyaltyEnabled
+            ? ", and loyalty updated."
+            : "."}
         </p>
       ) : null}
 
@@ -77,8 +108,32 @@ export default async function PosReceiptPage({
           <div>
             <span>Customer</span>
             <strong>
-              {sale.customer?.name ?? sale.customer?.phoneDisplay ?? "Anonymous"}
+              {sale.customer?.name ??
+                (sale.customer ? maskPhone(sale.customer.phoneDisplay) : "Anonymous")}
             </strong>
+            {sale.customer ? (
+              <small>{maskPhone(sale.customer.phoneDisplay)}</small>
+            ) : null}
+          </div>
+          {sale.customer ? (
+            <div>
+              <span>Membership</span>
+              <strong>
+                {membershipTierLabel(sale.membershipTierSnapshot)}
+                {sale.membershipNumberSnapshot
+                  ? ` · Membership #${sale.membershipNumberSnapshot}`
+                  : ""}
+              </strong>
+              <small>
+                {membershipStatusLabel(
+                  sale.membershipStatusSnapshot ?? "NOT_MEMBER",
+                )}
+              </small>
+            </div>
+          ) : null}
+          <div>
+            <span>Currency</span>
+            <strong>{sale.currency}</strong>
           </div>
         </div>
 
@@ -88,8 +143,11 @@ export default async function PosReceiptPage({
               <tr>
                 <th>Item</th>
                 <th>Qty</th>
-                <th>Rate</th>
+                <th>Regular unit</th>
+                <th>Applied unit</th>
+                <th>Saving</th>
                 <th>Total</th>
+                <th>Promotion</th>
               </tr>
             </thead>
             <tbody>
@@ -100,8 +158,22 @@ export default async function PosReceiptPage({
                     <small>{item.skuSnapshot}</small>
                   </td>
                   <td>{item.quantity.toString()}</td>
-                  <td>Rs {item.unitPrice.toFixed(2)}</td>
-                  <td>Rs {item.lineTotal.toFixed(2)}</td>
+                  <td>
+                    Rs {(item.regularUnitPrice ?? item.unitPrice).toFixed(2)}
+                  </td>
+                  <td>
+                    Rs {(item.appliedUnitPrice ?? item.unitPrice).toFixed(2)}
+                  </td>
+                  <td>Rs {item.discountAmount.toFixed(2)}</td>
+                  <td>
+                    Rs {item.lineTotal.sub(item.discountAmount).toFixed(2)}
+                  </td>
+                  <td>
+                    {promotionLabel(
+                      item.promotionSnapshot,
+                      item.promotionReference,
+                    ) ?? "—"}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -118,8 +190,12 @@ export default async function PosReceiptPage({
             <strong>Rs {sale.discountTotal.toFixed(2)}</strong>
           </div>
           <div className="receipt-total">
-            <span>Total</span>
+            <span>Final amount</span>
             <strong>Rs {sale.total.toFixed(2)}</strong>
+          </div>
+          <div>
+            <span>Final amount paid</span>
+            <strong>Rs {payment.amount.toFixed(2)}</strong>
           </div>
           <div>
             <span>Payment</span>
@@ -139,9 +215,9 @@ export default async function PosReceiptPage({
 
         {sale.customer?.loyaltyAccount ? (
           <p className="receipt-loyalty-note">
-            Current loyalty: {sale.customer.loyaltyAccount.pointBalance} point(s)
-            · Rs {sale.customer.loyaltyAccount.spendRemainder.toFixed(2)} carried
-            toward the next point.
+            {loyaltyEnabled
+              ? `Current loyalty: ${sale.customer.loyaltyAccount.pointBalance} point(s) · Rs ${sale.customer.loyaltyAccount.spendRemainder.toFixed(2)} carried toward the next point.`
+              : "Historical loyalty points are preserved in read-only form; new earning is disabled under the launch cutover."}
           </p>
         ) : null}
 

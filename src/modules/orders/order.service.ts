@@ -19,7 +19,11 @@ import {
   changeInventoryReserved,
   recordPhysicalInventoryMovement,
 } from "@/modules/inventory/inventory.service";
-import { applyEligibleSpend } from "@/modules/loyalty/loyalty.service";
+import {
+  applyEligibleSpend,
+  isLoyaltyEarningEnabled,
+} from "@/modules/loyalty/loyalty.service";
+import { quoteCustomerOrderPricing } from "@/modules/pricing/pricing.service";
 import {
   createCustomerOrderInputSchema,
   orderCommandSchema,
@@ -79,6 +83,24 @@ function commandItems(
     .sort((a, b) => a.productId.localeCompare(b.productId));
 }
 
+function matchesCreateCommand(
+  existing: {
+    customerId: string;
+    addressText: string;
+    deliveryCharge: Prisma.Decimal;
+    items: Array<{ productId: string; quantity: Prisma.Decimal }>;
+  },
+  parsed: CreateCustomerOrderInput,
+) {
+  return (
+    existing.customerId === parsed.customerId &&
+    existing.addressText === parsed.addressText &&
+    existing.deliveryCharge.equals(parsed.deliveryCharge) &&
+    JSON.stringify(commandItems(existing.items)) ===
+      JSON.stringify(commandItems(parsed.items))
+  );
+}
+
 async function paymentForOrder(
   tx: Prisma.TransactionClient,
   orderId: string,
@@ -135,14 +157,7 @@ export async function createCustomerOrder(
   });
 
   if (existing) {
-    const same =
-      existing.customerId === parsed.customerId &&
-      existing.addressText === parsed.addressText &&
-      existing.deliveryCharge.equals(parsed.deliveryCharge) &&
-      JSON.stringify(commandItems(existing.items)) ===
-        JSON.stringify(commandItems(parsed.items));
-
-    if (!same) {
+    if (!matchesCreateCommand(existing, parsed)) {
       throw new BusinessError(
         "IDEMPOTENCY_CONFLICT",
         "That order idempotency key was already used differently.",
@@ -152,8 +167,14 @@ export async function createCustomerOrder(
     return existing;
   }
 
-  return retrySerializable(() =>
-    prisma.$transaction(
+  const quote = await quoteCustomerOrderPricing(actor, {
+    customerId: parsed.customerId,
+    items: parsed.items,
+  });
+
+  try {
+    return await retrySerializable(() =>
+      prisma.$transaction(
       async (tx) => {
         const [store, customer] = await Promise.all([
           tx.location.findFirst({
@@ -200,7 +221,7 @@ export async function createCustomerOrder(
           products.map((product) => [product.id, product]),
         );
 
-        let subtotal = new Prisma.Decimal(0);
+        const quoteItems = new Map(quote.items.map((item) => [item.sku, item]));
         const prepared = parsed.items.map((item) => {
           const product = productById.get(item.productId);
 
@@ -212,9 +233,18 @@ export async function createCustomerOrder(
           }
 
           const quantity = new Prisma.Decimal(item.quantity);
-          const unitPrice = product.sellingPrice;
-          const lineTotal = unitPrice.mul(quantity).toDecimalPlaces(2);
-          subtotal = subtotal.add(lineTotal);
+          const quotedItem = quoteItems.get(product.sku);
+          if (
+            !quotedItem ||
+            !new Prisma.Decimal(quotedItem.quantity).equals(quantity)
+          ) {
+            throw new BusinessError(
+              "PRICING_RESPONSE_MISMATCH",
+              "The authoritative pricing quote no longer matches the order items.",
+            );
+          }
+          const unitPrice = new Prisma.Decimal(quotedItem.appliedUnitPrice);
+          const lineTotal = new Prisma.Decimal(quotedItem.lineTotal);
 
           return {
             productId: product.id,
@@ -222,15 +252,17 @@ export async function createCustomerOrder(
             productNameSnapshot: product.name,
             quantity,
             unitPrice,
-            discountAmount: new Prisma.Decimal(0),
+            discountAmount: new Prisma.Decimal(quotedItem.lineDiscount),
             lineTotal,
           };
         });
 
-        subtotal = subtotal.toDecimalPlaces(2);
-        const discountTotal = new Prisma.Decimal(0);
+        const subtotal = new Prisma.Decimal(quote.subtotal).toDecimalPlaces(2);
+        const discountTotal = new Prisma.Decimal(quote.discountTotal).toDecimalPlaces(2);
         const deliveryCharge = new Prisma.Decimal(parsed.deliveryCharge);
-        const total = subtotal.sub(discountTotal).add(deliveryCharge);
+        const total = new Prisma.Decimal(quote.finalTotal)
+          .add(deliveryCharge)
+          .toDecimalPlaces(2);
 
         const order = await tx.customerOrder.create({
           data: {
@@ -244,6 +276,10 @@ export async function createCustomerOrder(
             discountTotal,
             deliveryCharge,
             total,
+            pricingQuoteId: quote.quoteId,
+            pricingQuoteSnapshot: JSON.parse(
+              JSON.stringify(quote),
+            ) as Prisma.InputJsonValue,
             paymentMethod: PaymentMethod.COD,
             paymentStatus: PaymentStatus.PENDING,
             notes: parsed.notes,
@@ -290,8 +326,22 @@ export async function createCustomerOrder(
         return order;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
-  );
+      ),
+    );
+  } catch (error) {
+    const concurrentOrder = await prisma.customerOrder.findUnique({
+      where: { createIdempotencyKey: parsed.idempotencyKey },
+      include: orderInclude,
+    });
+    if (!concurrentOrder) throw error;
+    if (!matchesCreateCommand(concurrentOrder, parsed)) {
+      throw new BusinessError(
+        "IDEMPOTENCY_CONFLICT",
+        "That order idempotency key was already used differently.",
+      );
+    }
+    return concurrentOrder;
+  }
 }
 
 export async function confirmCustomerOrder(
@@ -680,17 +730,18 @@ export async function deliverCustomerOrder(
         });
 
         const eligibleSpend = eligibleOrderSpend(order);
-        const loyaltyTransaction = eligibleSpend.greaterThan(0)
-          ? await applyEligibleSpend(tx, {
-              customerId: order.customerId,
-              eligibleSpend,
-              sourceType: LoyaltySourceType.CUSTOMER_ORDER,
-              sourceId: order.id,
-              idempotencyKey: `loyalty-order:${order.id}`,
-              actorUserId: actor.id,
-              reason: `Delivered COD order ${order.orderNumber}`,
-            })
-          : null;
+        const loyaltyTransaction =
+          eligibleSpend.greaterThan(0) && isLoyaltyEarningEnabled()
+            ? await applyEligibleSpend(tx, {
+                customerId: order.customerId,
+                eligibleSpend,
+                sourceType: LoyaltySourceType.CUSTOMER_ORDER,
+                sourceId: order.id,
+                idempotencyKey: `loyalty-order:${order.id}`,
+                actorUserId: actor.id,
+                reason: `Delivered COD order ${order.orderNumber}`,
+              })
+            : null;
 
         const updated = await tx.customerOrder.update({
           where: { id: order.id },

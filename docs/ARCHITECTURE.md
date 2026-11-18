@@ -35,6 +35,26 @@ The modules share one database but must keep clear domain boundaries.
 
 These are code organization boundaries, not separate deployed services.
 
+## 2.1 Authoritative pricing boundary
+
+The POS requests a signed quote from the existing modern-trade service using
+the trusted store reference, exact SKU/quantity cart, and any verified customer
+reference. Membership identity, status, tier eligibility, promotions, and
+price calculation remain owned by modern-trade. Lite does not calculate or
+fall back to local member prices.
+
+Before creating a sale, Lite sends the quote token, cart, customer, channel, and
+idempotent sale reference back to modern-trade for validation. A valid quote is
+bound to that sale and its canonical price, discount, currency, rule version,
+and membership/promotion snapshots are persisted with the Lite transaction.
+The service credential is server-only; production calls require HTTPS. If the
+pricing service is unavailable, unauthenticated, or rejects the quote, the sale
+does not finalize.
+
+This dependency does not add a Lite microservice or database. It is an
+explicit API boundary to the already-existing authority, not data
+synchronization.
+
 ## 3. Mutation pattern
 
 For high-risk operations:

@@ -118,9 +118,53 @@ Expected:
 
 ### AT-POS-002 Server pricing
 
-Manipulate client-side item price.
+Create a modern-trade member and product promotion. Change the POS customer,
+cart, and quantity, then attempt to submit a browser-supplied price, discount,
+or membership tier.
 
-Expected server ignores unauthorized client total and uses server-authoritative product/pricing rules.
+Expected: the production POS route automatically requests a fresh quote for
+each valid change, exposes no manual price/discount/tier control, and rejects
+tampered pricing fields at the server boundary. The modern-trade service creates
+and validates the signed quote; the sale uses its regular/applied prices,
+discount, promotion and membership snapshots, quote ID, currency, and
+pricing-rule version.
+
+### AT-POS-009 Membership display and receipt
+
+Test guest, active registered, active Founding 1,000, and suspended/ineligible
+customer flows. Lookup by phone, remove/change the customer, and change item
+quantity. Verify the displayed member number, tier/status, masked phone, per-line
+savings, promotion, and totals come from verified customer data and the latest
+quote. Print/open the actual production POS receipt.
+
+Expected: guests and ineligible members receive regular pricing; active members
+receive only Modern-issued pricing; customer/cart changes replace the quote;
+receipt snapshots retain the original membership/promotion and applied price.
+No cashier action can assign Founding 1,000 or alter a price/discount.
+
+### AT-POS-006 Quote validation and idempotency
+
+Try an expired quote, wrong channel/customer/cart, and replay the quote into a
+different sale. Retry validation for the original sale reference.
+
+Expected: invalid, mismatched, expired, and replayed quotes are rejected; an
+idempotent retry for the same sale does not duplicate the sale or quote effect.
+An expired quote disables checkout in the POS and is rejected by the server.
+
+### AT-POS-007 Pricing service unavailable
+
+Make the modern-trade pricing service unavailable during quote or validation.
+
+Expected: finalization fails explicitly; no local-price fallback, sale,
+payment, inventory movement, or loyalty effect is created.
+
+### AT-POS-008 SKU reconciliation
+
+Compare Lite and modern-trade catalogs by exact SKU.
+
+Expected: the Owner/Admin report lists missing SKUs, duplicate mappings,
+regular-price mismatches, inactive products, and products ineligible for
+member pricing. Names are never used as matching keys.
 
 ### AT-POS-003 Insufficient stock
 
@@ -266,6 +310,20 @@ Attempt silent cancellation after dispatch.
 
 Expected operation rejected or redirected into explicit return/recovery flow.
 
+### AT-COD-010 Authoritative member price
+
+Create a COD order for a verified active member with an activated promotion
+explicitly eligible for the COD channel.
+
+Expected:
+
+- the validated Modern-trade quote determines all line prices, discounts, and
+  the order total
+- the order stores an immutable quote snapshot and quote ID
+- the pending COD payment matches the quoted total plus delivery charge
+- a quote-service failure creates no order or payment and never falls back to
+  Lite catalog prices
+
 ## 8. Returns/refunds
 
 ### AT-RET-001 POS return
@@ -291,6 +349,14 @@ Expected rejected with no inventory/payment mutation.
 Replay same return command.
 
 Expected no duplicate restock/refund/loyalty reversal.
+
+### AT-RET-004 Member-price return snapshot
+
+Finalize a discounted member sale, change the current product price, then
+process a partial return followed by the remaining return.
+
+Expected each refund uses the original applied price and allocated discount;
+the cumulative refund equals the original amount paid for the line.
 
 ## 9. Stock adjustments
 

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   CustomerOrderStatus,
   LoyaltySourceType,
@@ -24,6 +24,7 @@ import {
 } from "@/modules/orders/order.service";
 import { createProduct } from "@/modules/products/product.service";
 import { processReturn } from "@/modules/returns/return.service";
+import { installModernPricingMock } from "./helpers/modern-pricing-mock";
 
 const suffix = randomUUID().slice(0, 8);
 const digits = suffix.replace(/\D/g, "").padEnd(8, "9").slice(0, 8);
@@ -36,8 +37,10 @@ let customerId: string;
 let storeId: string;
 let deliveredOrderId: string;
 let deliveredLineId: string;
+let restorePricingMock: (() => void) | undefined;
 
 beforeAll(async () => {
+  restorePricingMock = installModernPricingMock();
   const user = await prisma.user.findUniqueOrThrow({
     where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
   });
@@ -108,6 +111,8 @@ beforeAll(async () => {
     idempotencyKey: `p7-cod-delivered-deliver-${suffix}`,
   });
 });
+
+afterAll(() => restorePricingMock?.());
 
 async function stockOnHand() {
   return (

@@ -32,7 +32,12 @@ Use a modular monolith:
 - one PostgreSQL database
 - Prisma ORM
 
-Do not split V1 into separate services.
+Pasalho Lite remains a modular monolith and does not add another service or
+database. The approved modern-trade integration is a narrow, authenticated,
+server-to-server dependency for membership identity verification and pricing
+quotes. Modern-trade is authoritative for membership, promotions, and prices;
+Lite must not implement a local promotion or member-pricing engine. A pricing
+service outage blocks sale finalization rather than falling back to Lite prices.
 
 Status: LOCKED
 
@@ -210,5 +215,13 @@ Status: LOCKED
 Launch readiness is evidence-based.
 
 The canonical end-to-end acceptance flow and critical replay/idempotency tests must pass before the system is called ready.
+
+Status: LOCKED
+
+## D-021 COD pricing channel
+
+Lite WhatsApp/phone COD orders use a distinct Modern-trade `COD` pricing
+channel. COD promotions must be explicitly eligible and do not inherit Web or
+POS eligibility.
 
 Status: LOCKED

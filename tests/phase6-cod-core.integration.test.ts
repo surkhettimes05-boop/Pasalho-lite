@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   CustomerOrderStatus,
   InventoryMovementType,
@@ -30,6 +30,7 @@ import {
   markTransferReady,
   receiveTransfer,
 } from "@/modules/transfers/transfer.service";
+import { installModernPricingMock } from "./helpers/modern-pricing-mock";
 
 const suffix = randomUUID().slice(0, 8);
 const digits = suffix.replace(/\D/g, "").padEnd(8, "6").slice(0, 8);
@@ -41,8 +42,10 @@ let productId: string;
 let customerId: string;
 let storeId: string;
 let orderId: string;
+let restorePricingMock: (() => void) | undefined;
 
 beforeAll(async () => {
+  restorePricingMock = installModernPricingMock();
   const user = await prisma.user.findUniqueOrThrow({
     where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
   });
@@ -109,6 +112,8 @@ beforeAll(async () => {
     }],
   });
 });
+
+afterAll(() => restorePricingMock?.());
 
 async function stock() {
   return prisma.stockBalance.findUniqueOrThrow({

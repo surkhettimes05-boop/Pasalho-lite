@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
+import type { IssuedPricingQuote } from "@/modules/pricing/pricing.schemas";
 
 type PosPaymentMethod = "CASH" | "QR_NON_CASH";
 
@@ -10,18 +11,19 @@ type PosProduct = {
   barcode: string | null;
   name: string;
   unit: string;
-  sellingPrice: string;
   available: string;
 };
 
 type CustomerSelection = {
   id: string;
-  phoneDisplay: string;
-  phoneNormalized: string;
+  phoneMasked: string;
   name: string | null;
   active: boolean;
   pointBalance: number;
   spendRemainder: string;
+  membershipNumber: number | null;
+  membershipTier: "REGISTERED_MEMBER" | "FOUNDING_1000" | null;
+  membershipStatus: "ACTIVE" | "SUSPENDED" | "CANCELLED" | "NOT_MEMBER";
 };
 
 type CustomerActionResult =
@@ -33,20 +35,42 @@ type CartLine = {
   quantity: string;
 };
 
+type QuoteActionResult =
+  | { ok: true; quote: IssuedPricingQuote }
+  | { ok: false; code: string };
+
 function normalized(value: string) {
   return value.trim().toLowerCase();
+}
+
+function membershipTierLabel(tier: CustomerSelection["membershipTier"]) {
+  if (tier === "FOUNDING_1000") return "Founding 1,000";
+  if (tier === "REGISTERED_MEMBER") return "Registered member";
+  return "No membership";
+}
+
+function membershipStatusLabel(
+  status: CustomerSelection["membershipStatus"],
+) {
+  if (status === "NOT_MEMBER") return "not a member";
+  return status.toLowerCase();
 }
 
 export function PosRegister({
   products,
   idempotencyKey,
   action,
+  quotePricing,
   lookupCustomer,
   createCustomer,
 }: {
   products: PosProduct[];
   idempotencyKey: string;
   action: (formData: FormData) => void | Promise<void>;
+  quotePricing: (input: {
+    customerId: string | null;
+    items: CartLine[];
+  }) => Promise<QuoteActionResult>;
   lookupCustomer: (phone: string) => Promise<CustomerActionResult>;
   createCustomer: (input: {
     phone: string;
@@ -62,6 +86,12 @@ export function PosRegister({
     useState<CustomerSelection | null>(null);
   const [customerMessage, setCustomerMessage] = useState("");
   const [customerBusy, setCustomerBusy] = useState(false);
+  const [pricingBusy, setPricingBusy] = useState(false);
+  const [pricingQuote, setPricingQuote] = useState<IssuedPricingQuote | null>(
+    null,
+  );
+  const [pricingMessage, setPricingMessage] = useState("");
+  const [quoteRevision, setQuoteRevision] = useState(0);
 
   const productById = useMemo(
     () => new Map(products.map((product) => [product.id, product])),
@@ -86,15 +116,88 @@ export function PosRegister({
       .slice(0, 20);
   }, [products, query]);
 
-  const subtotal = cart.reduce((sum, line) => {
-    const product = productById.get(line.productId);
+  useEffect(() => {
+    let cancelled = false;
 
-    if (!product) {
-      return sum;
+    if (!cart.length) return;
+
+    if (
+      cart.some(
+        (line) =>
+          !/^\d+(?:\.\d{1,3})?$/.test(line.quantity.trim()) ||
+          Number(line.quantity) <= 0,
+      )
+    ) {
+      const timer = setTimeout(() => {
+        if (!cancelled) setPricingMessage("INVALID_POS_INPUT");
+      }, 0);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
     }
 
-    return sum + Number(product.sellingPrice) * Number(line.quantity || 0);
-  }, 0);
+    const timer = setTimeout(() => {
+      startTransition(async () => {
+        setPricingBusy(true);
+        try {
+          const result = await quotePricing({
+            customerId: selectedCustomer?.id ?? null,
+            items: cart,
+          });
+          if (cancelled) return;
+          if (!result.ok) {
+            setPricingMessage(result.code);
+            return;
+          }
+          if (Date.parse(result.quote.expiresAt) <= Date.now()) {
+            setPricingMessage("QUOTE_EXPIRED");
+            return;
+          }
+
+          setPricingQuote(result.quote);
+          setSelectedCustomer((current) => {
+            if (!current) return current;
+            if (
+              current.membershipNumber === result.quote.membershipNumber &&
+              current.membershipTier === result.quote.membershipTier &&
+              current.membershipStatus === result.quote.membershipStatus
+            ) {
+              return current;
+            }
+            return {
+              ...current,
+              membershipNumber: result.quote.membershipNumber,
+              membershipTier: result.quote.membershipTier,
+              membershipStatus: result.quote.membershipStatus,
+            };
+          });
+        } catch {
+          if (!cancelled) setPricingMessage("PRICING_SERVICE_UNAVAILABLE");
+        } finally {
+          if (!cancelled) setPricingBusy(false);
+        }
+      });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [cart, selectedCustomer?.id, quoteRevision, quotePricing]);
+
+  useEffect(() => {
+    if (!pricingQuote) return;
+    const delay = Date.parse(pricingQuote.expiresAt) - Date.now();
+    const quoteId = pricingQuote.quoteId;
+    const timer = setTimeout(() => {
+      setPricingQuote((current) =>
+        current?.quoteId === quoteId ? null : current,
+      );
+      setPricingMessage("QUOTE_EXPIRED");
+    }, Math.max(0, delay));
+    return () => clearTimeout(timer);
+  }, [pricingQuote]);
 
   async function handleCustomerLookup() {
     if (!customerPhone.trim()) {
@@ -103,7 +206,10 @@ export function PosRegister({
     }
 
     setCustomerBusy(true);
+    setPricingBusy(false);
     setCustomerMessage("");
+    setPricingQuote(null);
+    setPricingMessage("");
 
     try {
       const result = await lookupCustomer(customerPhone);
@@ -116,8 +222,11 @@ export function PosRegister({
         setCustomerMessage("Customer not found. You can create them below.");
       } else {
         setSelectedCustomer(null);
-        setCustomerMessage("Check the phone number and try again.");
+        setCustomerMessage(`Customer lookup failed (${result.code}).`);
       }
+    } catch {
+      setSelectedCustomer(null);
+      setCustomerMessage("Customer lookup failed. Check the connection and retry.");
     } finally {
       setCustomerBusy(false);
     }
@@ -130,7 +239,10 @@ export function PosRegister({
     }
 
     setCustomerBusy(true);
+    setPricingBusy(false);
     setCustomerMessage("");
+    setPricingQuote(null);
+    setPricingMessage("");
 
     try {
       const result = await createCustomer({
@@ -143,8 +255,10 @@ export function PosRegister({
         setCustomerName("");
         setCustomerMessage("Customer created and selected.");
       } else {
-        setCustomerMessage("Customer could not be created.");
+        setCustomerMessage(`Customer could not be created (${result.code}).`);
       }
+    } catch {
+      setCustomerMessage("Customer creation failed. Check the connection and retry.");
     } finally {
       setCustomerBusy(false);
     }
@@ -155,6 +269,9 @@ export function PosRegister({
     setCustomerPhone("");
     setCustomerName("");
     setCustomerMessage("");
+    setPricingQuote(null);
+    setPricingBusy(false);
+    setPricingMessage("");
   }
 
   function addProduct(product: PosProduct) {
@@ -178,6 +295,9 @@ export function PosRegister({
 
       return [...current, { productId: product.id, quantity: "1" }];
     });
+    setPricingQuote(null);
+    setPricingBusy(false);
+    setPricingMessage("");
 
     setQuery("");
   }
@@ -207,6 +327,14 @@ export function PosRegister({
   }
 
   function changeQuantity(productId: string, nextQuantity: string) {
+    setPricingQuote(null);
+    setPricingBusy(false);
+    setPricingMessage(
+      /^\d+(?:\.\d{1,3})?$/.test(nextQuantity.trim()) &&
+        Number(nextQuantity) > 0
+        ? ""
+        : "INVALID_POS_INPUT",
+    );
     setCart((current) =>
       current.map((line) =>
         line.productId === productId
@@ -217,10 +345,22 @@ export function PosRegister({
   }
 
   function removeProduct(productId: string) {
+    setPricingQuote(null);
+    setPricingBusy(false);
+    setPricingMessage("");
     setCart((current) =>
       current.filter((line) => line.productId !== productId),
     );
   }
+
+  function handlePricingQuote() {
+    setPricingQuote(null);
+    setPricingBusy(false);
+    setPricingMessage("");
+    setQuoteRevision((current) => current + 1);
+  }
+
+  const quoteReady = pricingQuote !== null && !pricingBusy;
 
   return (
     <div className="pos-layout">
@@ -272,7 +412,6 @@ export function PosRegister({
                   </small>
                 </span>
                 <span className="pos-product-price">
-                  Rs {product.sellingPrice}
                   <small>
                     {product.available} {product.unit} available
                   </small>
@@ -300,7 +439,7 @@ export function PosRegister({
             </div>
             {selectedCustomer ? (
               <button className="link-button" type="button" onClick={clearCustomer}>
-                Clear
+                Remove customer
               </button>
             ) : null}
           </div>
@@ -308,8 +447,16 @@ export function PosRegister({
           {selectedCustomer ? (
             <div className="customer-selected-card">
               <div>
-                <strong>{selectedCustomer.name ?? selectedCustomer.phoneDisplay}</strong>
-                <small>{selectedCustomer.phoneDisplay}</small>
+                <strong>{selectedCustomer.name ?? "Customer"}</strong>
+                <small>{selectedCustomer.phoneMasked}</small>
+                <small>
+                  {membershipTierLabel(selectedCustomer.membershipTier)}
+                  {selectedCustomer.membershipNumber
+                    ? ` · Membership #${selectedCustomer.membershipNumber}`
+                    : ""}
+                  {" · "}
+                  {membershipStatusLabel(selectedCustomer.membershipStatus)}
+                </small>
               </div>
               <div>
                 <strong>{selectedCustomer.pointBalance} point(s)</strong>
@@ -368,13 +515,28 @@ export function PosRegister({
             <p className="muted">Scan a barcode or select a product.</p>
           </div>
         ) : (
-          <form action={action} className="pos-checkout">
+          <form
+            action={action}
+            className="pos-checkout"
+            onSubmit={(event) => {
+              if (!pricingQuote || Date.parse(pricingQuote.expiresAt) <= Date.now()) {
+                event.preventDefault();
+                setPricingQuote(null);
+                setPricingMessage("QUOTE_EXPIRED");
+              }
+            }}
+          >
             <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
             <input type="hidden" name="lineCount" value={cart.length} />
             <input
               type="hidden"
               name="customerId"
               value={selectedCustomer?.id ?? ""}
+            />
+            <input
+              type="hidden"
+              name="signedQuoteToken"
+              value={pricingQuote?.signedQuoteToken ?? ""}
             />
 
             <div className="pos-cart-lines">
@@ -385,8 +547,9 @@ export function PosRegister({
                   return null;
                 }
 
-                const lineTotal =
-                  Number(product.sellingPrice) * Number(line.quantity || 0);
+                const quoteItem = pricingQuote?.items.find(
+                  (item) => item.sku === product.sku,
+                );
 
                 return (
                   <div className="pos-cart-line" key={line.productId}>
@@ -397,9 +560,16 @@ export function PosRegister({
                     />
                     <div>
                       <strong>{product.name}</strong>
-                      <small>
-                        {product.sku} · Rs {product.sellingPrice}/{product.unit}
-                      </small>
+                      <small>{product.sku} · {product.unit}</small>
+                      {quoteItem ? (
+                        <small>
+                          Regular Rs {quoteItem.regularUnitPrice} · Applied Rs{" "}
+                          {quoteItem.appliedUnitPrice}
+                        </small>
+                      ) : null}
+                      {quoteItem ? (
+                        <small>Member saving Rs {quoteItem.lineDiscount}</small>
+                      ) : null}
                     </div>
                     <label>
                       Qty
@@ -413,7 +583,12 @@ export function PosRegister({
                         required
                       />
                     </label>
-                    <strong>Rs {lineTotal.toFixed(2)}</strong>
+                    <strong>
+                      {quoteItem ? `Rs ${quoteItem.lineTotal}` : "Not quoted"}
+                    </strong>
+                    {quoteItem?.promotionSnapshot ? (
+                      <small>{quoteItem.promotionSnapshot.name}</small>
+                    ) : null}
                     <button
                       className="link-button danger-link"
                       type="button"
@@ -428,18 +603,42 @@ export function PosRegister({
 
             <div className="pos-totals">
               <div>
-                <span>Subtotal</span>
-                <strong>Rs {subtotal.toFixed(2)}</strong>
+                <span>Regular subtotal</span>
+                <strong>
+                  {pricingQuote ? `Rs ${pricingQuote.subtotal}` : "—"}
+                </strong>
               </div>
               <div>
-                <span>Discount</span>
-                <strong>Rs 0.00</strong>
+                <span>Member discount</span>
+                <strong>
+                  {pricingQuote ? `Rs ${pricingQuote.discountTotal}` : "—"}
+                </strong>
               </div>
               <div className="pos-grand-total">
-                <span>Total</span>
-                <strong>Rs {subtotal.toFixed(2)}</strong>
+                <span>Final payable</span>
+                <strong>
+                  {pricingQuote ? `Rs ${pricingQuote.finalTotal}` : "—"}
+                </strong>
               </div>
             </div>
+            <div className="pos-phase-note">
+              {pricingQuote
+                ? `Authoritative quote · ${membershipTierLabel(pricingQuote.membershipTier)} · ${membershipStatusLabel(pricingQuote.membershipStatus)} · expires ${pricingQuote.expiresAt}.`
+                : "Waiting for an authoritative price quote. No local price will be used."}
+            </div>
+            {pricingMessage ? (
+              <p className="error-message" role="alert">
+                Pricing quote failed ({pricingMessage}). No local price will be used.
+              </p>
+            ) : null}
+            <button
+              className="secondary-light-button"
+              type="button"
+              onClick={handlePricingQuote}
+              disabled={pricingBusy}
+            >
+              {pricingBusy ? "Requesting price..." : "Refresh authoritative price"}
+            </button>
 
             <fieldset className="payment-methods">
               <legend>Payment method</legend>
@@ -471,8 +670,12 @@ export function PosRegister({
                 : "Anonymous sale: no loyalty will be earned."}
             </div>
 
-            <button className="primary-button pos-finalize" type="submit">
-              Finalize sale · Rs {subtotal.toFixed(2)}
+            <button
+              className="primary-button pos-finalize"
+              type="submit"
+              disabled={!quoteReady || pricingBusy}
+            >
+              Finalize sale
             </button>
           </form>
         )}

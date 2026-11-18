@@ -14,7 +14,15 @@ import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
 import { recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
-import { applyEligibleSpend } from "@/modules/loyalty/loyalty.service";
+import {
+  applyEligibleSpend,
+  isLoyaltyEarningEnabled,
+} from "@/modules/loyalty/loyalty.service";
+import {
+  quotePosPricing,
+  validatePosPricingQuote,
+} from "@/modules/pricing/pricing.service";
+import type { PricingQuotePayload } from "@/modules/pricing/pricing.schemas";
 import {
   finalizeSaleInputSchema,
   type FinalizeSaleInput,
@@ -159,6 +167,7 @@ async function returnReplayOrConflict(parsed: FinalizeSaleInput) {
 async function finalizeSaleTransaction(
   actor: SessionUser,
   parsed: FinalizeSaleInput,
+  pricingQuote: PricingQuotePayload,
 ) {
   return prisma.$transaction(
     async (tx) => {
@@ -223,9 +232,15 @@ async function finalizeSaleTransaction(
         productNameSnapshot: string;
         quantity: Prisma.Decimal;
         unitPrice: Prisma.Decimal;
+        regularUnitPrice: Prisma.Decimal;
+        appliedUnitPrice: Prisma.Decimal;
         discountAmount: Prisma.Decimal;
         lineTotal: Prisma.Decimal;
         unitCostSnapshot: Prisma.Decimal;
+        pricingQuoteId: string;
+        promotionReference: string | null;
+        promotionSnapshot: PricingQuotePayload["items"][number]["promotionSnapshot"];
+        currency: string;
       }> = [];
 
       for (const commandItem of parsed.items) {
@@ -251,25 +266,58 @@ async function finalizeSaleTransaction(
           );
         }
 
-        const unitPrice = product.sellingPrice;
-        const lineTotal = unitPrice.mul(quantity).toDecimalPlaces(2);
+        const quoteItem = pricingQuote.items.find(
+          (item) => item.sku === product.sku,
+        );
+        if (
+          !quoteItem ||
+          !new Prisma.Decimal(quoteItem.quantity).equals(quantity)
+        ) {
+          throw new BusinessError(
+            "PRICING_RESPONSE_MISMATCH",
+            "The validated pricing quote does not match the POS cart.",
+          );
+        }
 
-        subtotal = subtotal.add(lineTotal);
+        const unitPrice = new Prisma.Decimal(quoteItem.regularUnitPrice);
+        const appliedUnitPrice = new Prisma.Decimal(
+          quoteItem.appliedUnitPrice,
+        );
+        const discountAmount = new Prisma.Decimal(quoteItem.lineDiscount);
+        const appliedLineTotal = new Prisma.Decimal(quoteItem.lineTotal);
+        const regularLineTotal = appliedLineTotal.add(discountAmount);
+
+        subtotal = subtotal.add(regularLineTotal);
         preparedItems.push({
           productId: product.id,
           skuSnapshot: product.sku,
           productNameSnapshot: product.name,
           quantity,
           unitPrice,
-          discountAmount: new Prisma.Decimal(0),
-          lineTotal,
+          regularUnitPrice: unitPrice,
+          appliedUnitPrice,
+          discountAmount,
+          lineTotal: regularLineTotal,
           unitCostSnapshot: product.costPrice,
+          pricingQuoteId: pricingQuote.quoteId,
+          promotionReference: quoteItem.promotionReference,
+          promotionSnapshot: quoteItem.promotionSnapshot,
+          currency: pricingQuote.currency,
         });
       }
 
       subtotal = subtotal.toDecimalPlaces(2);
-      const discountTotal = new Prisma.Decimal(0);
-      const total = subtotal.sub(discountTotal);
+      const discountTotal = new Prisma.Decimal(pricingQuote.discountTotal);
+      const total = new Prisma.Decimal(pricingQuote.finalTotal);
+      if (
+        !subtotal.equals(pricingQuote.subtotal) ||
+        !subtotal.sub(discountTotal).equals(total)
+      ) {
+        throw new BusinessError(
+          "PRICING_RESPONSE_MISMATCH",
+          "The validated pricing quote has inconsistent totals.",
+        );
+      }
       const now = new Date();
 
       const sale = await tx.sale.create({
@@ -277,6 +325,15 @@ async function finalizeSaleTransaction(
           receiptNumber: buildReceiptNumber(now),
           storeLocationId: store.id,
           customerId: parsed.customerId ?? null,
+          pricingQuoteId: pricingQuote.quoteId,
+          pricingRuleVersion: pricingQuote.pricingRuleVersion,
+          currency: pricingQuote.currency,
+          membershipNumberSnapshot: pricingQuote.membershipNumber,
+          membershipTierSnapshot: pricingQuote.membershipTier,
+          membershipStatusSnapshot: pricingQuote.membershipStatus,
+          pricingQuoteSnapshot: {
+            ...pricingQuote,
+          },
           status: SaleStatus.FINALIZED,
           subtotal,
           discountTotal,
@@ -286,7 +343,12 @@ async function finalizeSaleTransaction(
           finalizedByUserId: actor.id,
           idempotencyKey: parsed.idempotencyKey,
           items: {
-            create: preparedItems,
+            create: preparedItems.map(
+              ({ promotionSnapshot, ...item }) => ({
+                ...item,
+                ...(promotionSnapshot ? { promotionSnapshot } : {}),
+              }),
+            ),
           },
         },
         include: saleInclude,
@@ -320,17 +382,18 @@ async function finalizeSaleTransaction(
         });
       }
 
-      const loyaltyTransaction = parsed.customerId
-        ? await applyEligibleSpend(tx, {
-            customerId: parsed.customerId,
-            eligibleSpend: total,
-            sourceType: LoyaltySourceType.SALE,
-            sourceId: sale.id,
-            idempotencyKey: `loyalty-sale:${sale.id}`,
-            actorUserId: actor.id,
-            reason: `Eligible POS spend ${sale.receiptNumber}`,
-          })
-        : null;
+      const loyaltyTransaction =
+        parsed.customerId && isLoyaltyEarningEnabled()
+          ? await applyEligibleSpend(tx, {
+              customerId: parsed.customerId,
+              eligibleSpend: total,
+              sourceType: LoyaltySourceType.SALE,
+              sourceId: sale.id,
+              idempotencyKey: `loyalty-sale:${sale.id}`,
+              actorUserId: actor.id,
+              reason: `Eligible POS spend ${sale.receiptNumber}`,
+            })
+          : null;
 
       await tx.auditLog.create({
         data: {
@@ -348,6 +411,8 @@ async function finalizeSaleTransaction(
             paymentMethod: payment.method,
             itemCount: sale.items.length,
             customerId: sale.customerId,
+            pricingQuoteId: sale.pricingQuoteId,
+            pricingRuleVersion: sale.pricingRuleVersion,
             loyaltyPointsEarned: loyaltyTransaction?.pointsDelta ?? 0,
           },
         },
@@ -374,9 +439,24 @@ export async function finalizeSale(
     return replay;
   }
 
+  let signedQuoteToken = parsed.signedQuoteToken;
+  if (!signedQuoteToken) {
+    const issuedQuote = await quotePosPricing(actor, {
+      customerId: parsed.customerId ?? null,
+      items: parsed.items,
+    });
+    signedQuoteToken = issuedQuote.signedQuoteToken;
+  }
+  const pricingQuote = await validatePosPricingQuote(actor, {
+    customerId: parsed.customerId ?? null,
+    items: parsed.items,
+    idempotencyKey: parsed.idempotencyKey,
+    signedQuoteToken,
+  });
+
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await finalizeSaleTransaction(actor, parsed);
+      return await finalizeSaleTransaction(actor, parsed, pricingQuote);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -451,7 +531,6 @@ export async function getPosCatalog() {
       barcode: product.barcode,
       name: product.name,
       unit: product.unit,
-      sellingPrice: product.sellingPrice.toFixed(2),
       available: onHand.sub(reserved).toString(),
     };
   });

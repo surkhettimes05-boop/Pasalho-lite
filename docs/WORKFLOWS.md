@@ -51,22 +51,31 @@ Retrying the same post action must not duplicate stock.
 1. Cashier opens POS.
 2. Scans barcode or searches SKU.
 3. Adds quantity.
-4. Server validates product active status and store availability.
-5. Cashier optionally identifies customer by phone.
-6. System shows total and projected loyalty earning.
-7. Cashier selects payment method.
-8. Cashier finalizes sale.
-9. Server atomically:
-   - recalculates totals
+4. Cashier optionally looks up a customer by phone; the server verifies linked
+   membership and displays only a masked phone, member number, tier, and status.
+   An Owner/Admin may link that local customer to a verified modern-trade identity.
+5. Lite automatically requests an authoritative quote whenever the customer,
+   cart, or quantity changes and displays only quote-returned prices and savings.
+6. Cashier selects payment method and finalizes only with a current signed quote.
+7. Server validates the quote with modern-trade, then atomically:
    - creates Sale
    - creates SaleItems
    - creates Payment
    - creates POS_SALE inventory movements
    - decreases store stock
    - creates loyalty transaction when eligible
-10. Receipt is shown or printed.
+8. Receipt shows regular/applied prices, savings, promotion, membership
+   snapshots, discount, final amount paid, and payment method.
 
-If any critical step fails, the sale must not partially finalize.
+Lite stores the authoritative quote, regular/applied prices, discounts,
+promotion and membership snapshots, quote ID, pricing-rule version, and
+currency. The quote is bound to the idempotent sale reference. If quote
+creation/validation fails or the service is unavailable, no local price
+fallback is allowed and the sale must not partially finalize.
+Cashiers cannot enter prices or discounts, select a tier, or assign Founding
+1,000. QR membership scanning is not offered because the current POS device
+architecture supports keyboard-wedge product barcodes but has no QR/camera
+scanner.
 
 ## 4. Customer loyalty earning
 
@@ -173,6 +182,8 @@ Use a recovery/return flow:
    - records refund/payment correction
    - reverses loyalty effect as required
 7. Original sale remains historically unchanged.
+8. POS-sale refunds use the original applied price and allocated discount;
+   current catalog pricing is never consulted.
 
 ## 8. Stock adjustment
 

@@ -6,6 +6,7 @@ import { ZodError } from "zod";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { BusinessError } from "@/lib/business-error";
 import { createCustomer } from "@/modules/customers/customer.service";
+import { linkCustomerMembershipIdentity } from "@/modules/pricing/pricing.service";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "");
@@ -43,4 +44,27 @@ export async function createCustomerAction(formData: FormData) {
 
   revalidatePath("/customers");
   redirect(`/customers/${customerId}?success=created`);
+}
+
+export async function linkCustomerMembershipIdentityAction(
+  formData: FormData,
+) {
+  const user = await requireCurrentUser();
+  const customerId = value(formData, "customerId");
+
+  try {
+    await linkCustomerMembershipIdentity(user, {
+      customerId,
+      membershipIdentityId:
+        value(formData, "membershipIdentityId").trim() || null,
+    });
+  } catch (error) {
+    redirect(
+      `/customers/${encodeURIComponent(customerId)}?error=${encodeURIComponent(errorCode(error))}`,
+    );
+  }
+
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  redirect(`/customers/${customerId}?success=membership-link-updated`);
 }

@@ -29,6 +29,11 @@ export function AppShell({ user, children }: { user: SessionUser; children: Reac
         {store && <SideNavLink href="/daily-close">Daily Close</SideNavLink>}
         <span className="nav-group-label">Management</span>
         <SideNavLink href="/reports">Reports</SideNavLink>
+        {owner && (
+          <SideNavLink href="/pricing/reconciliation">
+            Pricing / SKU reconciliation
+          </SideNavLink>
+        )}
         {owner && <SideNavLink href="/users-audit">Users / Audit</SideNavLink>}
       </nav>
       <div className="sidebar-user"><strong>{user.name}</strong><span>{user.role.replaceAll("_", " ")}</span><form action={logoutAction}><button className="secondary-button" type="submit">Sign out</button></form></div>

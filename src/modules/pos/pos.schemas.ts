@@ -10,7 +10,7 @@ const quantityString = z
 const saleItemSchema = z.object({
   productId: z.string().uuid(),
   quantity: quantityString,
-});
+}).strict();
 
 export const finalizeSaleInputSchema = z
   .object({
@@ -20,8 +20,10 @@ export const finalizeSaleInputSchema = z
       PaymentMethod.QR_NON_CASH,
     ]),
     customerId: z.string().uuid().nullable().optional(),
+    signedQuoteToken: z.string().min(20).max(32_768).optional(),
     items: z.array(saleItemSchema).min(1).max(100),
   })
+  .strict()
   .superRefine((value, context) => {
     const productIds = value.items.map((item) => item.productId);
 

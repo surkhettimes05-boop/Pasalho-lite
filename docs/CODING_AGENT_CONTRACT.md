@@ -82,7 +82,11 @@ Next.js + TypeScript + Prisma + PostgreSQL
 
 as one modular monolith.
 
-Do not create a separate backend repository/service.
+Do not create another Pasalho Lite backend repository/service. The approved
+modern-trade pricing API is the only external service integration: use it
+server-to-server for membership verification and signed POS quotes. Never
+implement local membership eligibility, promotion calculation, or a local
+price fallback.
 
 Server logic may be organized into modules/services, but deploy as one application.
 

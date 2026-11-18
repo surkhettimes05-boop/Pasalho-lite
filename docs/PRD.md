@@ -57,19 +57,25 @@ V1 must remain a modular monolith:
 - one PostgreSQL database
 - Prisma ORM
 - one deployment
-- one source of truth
+- one source of truth for Lite-managed transactions and inventory
 
 Do not introduce:
 
 - microservices
 - Redis unless a proven launch-blocking need appears
 - event buses
-- a separate commerce backend
+- a separate commerce backend for Pasalho Lite (the approved modern-trade
+  service remains authoritative for membership and pricing only)
 - a separate loyalty backend
 - a customer mobile app
 - a separate customer website checkout engine
-- cross-system synchronization
+- scheduled or hidden cross-system synchronization (Lite makes explicit
+  authenticated server-to-server pricing/identity requests only)
 - external workflow engines
+
+Membership identity, membership status/tier, promotions, and member-price
+calculation are authoritative in the already-existing modern-trade system and
+are accessed only through the approved server-to-server API.
 
 ## 5. Users
 

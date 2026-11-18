@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CustomerOrderStatus, PaymentSourceType, ReservationStatus, Role } from "@/generated/prisma/client";
 import { AuthorizationError } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
@@ -21,6 +21,10 @@ import {
   markTransferReady,
   receiveTransfer,
 } from "@/modules/transfers/transfer.service";
+import {
+  installModernPricingMock,
+  type ModernPricingMockCleanup,
+} from "./helpers/modern-pricing-mock";
 
 const suffix = randomUUID().slice(0, 8);
 const digits = suffix.replace(/\D/g, "").padEnd(8, "8").slice(0, 8);
@@ -31,8 +35,10 @@ let warehouse: SessionUser;
 let productId: string;
 let customerId: string;
 let storeId: string;
+let restorePricingMock: ModernPricingMockCleanup | undefined;
 
 beforeAll(async () => {
+  restorePricingMock = installModernPricingMock();
   const user = await prisma.user.findUniqueOrThrow({
     where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
   });
@@ -100,6 +106,8 @@ beforeAll(async () => {
   });
 });
 
+afterAll(() => restorePricingMock?.());
+
 async function stock() {
   return prisma.stockBalance.findUniqueOrThrow({
     where: { productId_locationId: { productId, locationId: storeId } },
@@ -144,6 +152,129 @@ describe("Phase 6 COD safeguards", () => {
         sourceId: first.id,
       },
     })).toBe(1);
+  });
+
+  it("accepts concurrent submissions with the same idempotency key once", async () => {
+    const key = `p6-edge-create-concurrent-${suffix}`;
+    const input = {
+      customerId,
+      addressText: "Concurrent replay address",
+      deliveryCharge: "0",
+      notes: "",
+      idempotencyKey: key,
+      items: [{ productId, quantity: "1" }],
+    };
+
+    const [first, second] = await Promise.all([
+      createCustomerOrder(cashier, input),
+      createCustomerOrder(cashier, input),
+    ]);
+
+    expect(second.id).toBe(first.id);
+    expect(
+      await prisma.customerOrder.count({
+        where: { createIdempotencyKey: key },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.payment.count({
+        where: {
+          sourceType: PaymentSourceType.CUSTOMER_ORDER,
+          sourceId: first.id,
+        },
+      }),
+    ).toBe(1);
+  });
+
+  it("fails safely when authoritative COD pricing is unavailable", async () => {
+    const key = `p6-edge-pricing-down-${suffix}`;
+    const paymentsBefore = await prisma.payment.count();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ code: "PRICING_UNAVAILABLE" }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      });
+
+    try {
+      await expect(
+        createCustomerOrder(cashier, {
+          customerId,
+          addressText: "Pricing unavailable address",
+          deliveryCharge: "0",
+          notes: "",
+          idempotencyKey: key,
+          items: [{ productId, quantity: "1" }],
+        }),
+      ).rejects.toMatchObject<Partial<BusinessError>>({
+        code: "PRICING_SERVICE_UNAVAILABLE",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(
+      await prisma.customerOrder.count({
+        where: { createIdempotencyKey: key },
+      }),
+    ).toBe(0);
+    expect(await prisma.payment.count()).toBe(paymentsBefore);
+  });
+
+  it("stores the validated COD member quote and charges its accepted price", async () => {
+    const membershipIdentityId = randomUUID();
+    const member = await createCustomer(cashier, {
+      phone: `96${digits}`,
+      name: "COD Member",
+      notes: "",
+    });
+    await prisma.customer.update({
+      where: { id: member.id },
+      data: { membershipIdentityId },
+    });
+    restorePricingMock?.setMembershipProfile(membershipIdentityId, {
+      membershipNumber: 52,
+      membershipTier: "REGISTERED_MEMBER",
+      membershipStatus: "ACTIVE",
+    });
+
+    const order = await createCustomerOrder(cashier, {
+      customerId: member.id,
+      addressText: "Member quote address",
+      deliveryCharge: "10.00",
+      notes: "",
+      idempotencyKey: `p6-edge-member-cod-${suffix}`,
+      items: [{ productId, quantity: "1" }],
+    });
+
+    expect(order.subtotal.toFixed(2)).toBe("100.00");
+    expect(order.discountTotal.toFixed(2)).toBe("5.00");
+    expect(order.total.toFixed(2)).toBe("105.00");
+    expect(order.pricingQuoteId).toBeTruthy();
+    expect(order.pricingQuoteSnapshot).toMatchObject({
+      channel: "COD",
+      membershipNumber: 52,
+      items: [{ appliedUnitPrice: "95.00", lineDiscount: "5.00" }],
+    });
+    expect(order.items[0].unitPrice.toFixed(2)).toBe("95.00");
+    expect(order.items[0].discountAmount.toFixed(2)).toBe("5.00");
+    expect(order.items[0].lineTotal.toFixed(2)).toBe("95.00");
+    await expect(
+      prisma.customerOrder.update({
+        where: { id: order.id },
+        data: { pricingQuoteSnapshot: { channel: "POS" } },
+      }),
+    ).rejects.toThrow("customer order facts are immutable");
+
+    const payment = await prisma.payment.findUniqueOrThrow({
+      where: {
+        sourceType_sourceId: {
+          sourceType: PaymentSourceType.CUSTOMER_ORDER,
+          sourceId: order.id,
+        },
+      },
+    });
+    expect(payment.amount.toFixed(2)).toBe("105.00");
   });
 
   it("rejects state skipping from NEW directly to dispatch", async () => {

@@ -12,6 +12,11 @@ import {
   findCustomerByPhone,
 } from "@/modules/customers/customer.service";
 import { finalizeSale } from "@/modules/pos/pos.service";
+import {
+  getPosMembershipSnapshot,
+  quotePosPricing,
+} from "@/modules/pricing/pricing.service";
+import { isLoyaltyEarningEnabled } from "@/modules/loyalty/loyalty.service";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "");
@@ -39,16 +44,22 @@ function customerPayload(customer: {
     pointBalance: number;
     spendRemainder: { toFixed: (digits: number) => string };
   } | null;
-}) {
+}, membership: Awaited<ReturnType<typeof getPosMembershipSnapshot>>) {
+  const phoneDigits = customer.phoneNormalized.replace(/\D/g, "");
   return {
     id: customer.id,
-    phoneDisplay: customer.phoneDisplay,
-    phoneNormalized: customer.phoneNormalized,
+    phoneMasked: `****${phoneDigits.slice(-4)}`,
     name: customer.name,
     active: customer.active,
     pointBalance: customer.loyaltyAccount?.pointBalance ?? 0,
     spendRemainder:
       customer.loyaltyAccount?.spendRemainder.toFixed(2) ?? "0.00",
+    loyaltyStatus: isLoyaltyEarningEnabled()
+      ? "active"
+      : "historical-only",
+    membershipNumber: membership.membershipNumber,
+    membershipTier: membership.membershipTier,
+    membershipStatus: membership.membershipStatus,
   };
 }
 
@@ -66,9 +77,10 @@ export async function lookupCustomerForPosAction(phone: string) {
       };
     }
 
+    const membership = await getPosMembershipSnapshot(user, customer.id);
     return {
       ok: true as const,
-      customer: customerPayload(customer),
+      customer: customerPayload(customer, membership),
     };
   } catch (error) {
     return {
@@ -90,10 +102,11 @@ export async function createCustomerForPosAction(input: {
       name: input.name,
       notes: "",
     });
+    const membership = await getPosMembershipSnapshot(user, customer.id);
 
     return {
       ok: true as const,
-      customer: customerPayload(customer),
+      customer: customerPayload(customer, membership),
     };
   } catch (error) {
     if (
@@ -104,13 +117,17 @@ export async function createCustomerForPosAction(input: {
         const existing = await findCustomerByPhone(input.phone);
 
         if (existing?.active) {
+          const membership = await getPosMembershipSnapshot(user, existing.id);
           return {
             ok: true as const,
-            customer: customerPayload(existing),
+            customer: customerPayload(existing, membership),
           };
         }
-      } catch {
-        // Fall through to the original customer error.
+      } catch (existingError) {
+        return {
+          ok: false as const,
+          code: operationError(existingError),
+        };
       }
     }
 
@@ -121,8 +138,32 @@ export async function createCustomerForPosAction(input: {
   }
 }
 
+export async function quotePosPricingAction(input: {
+  customerId: string | null;
+  items: Array<{ productId: string; quantity: string }>;
+}) {
+  const user = await requireCurrentUser();
+
+  try {
+    const quote = await quotePosPricing(user, input);
+    return { ok: true as const, quote };
+  } catch (error) {
+    return {
+      ok: false as const,
+      code: operationError(error),
+    };
+  }
+}
+
 export async function finalizeSaleAction(formData: FormData) {
   const user = await requireCurrentUser();
+  if (
+    [...formData.keys()].some((key) =>
+      /price|discount|subtotal|total|membership|tier|promotion/i.test(key),
+    )
+  ) {
+    redirect("/pos?error=INVALID_POS_INPUT");
+  }
   const lineCount = Number(value(formData, "lineCount"));
 
   if (!Number.isInteger(lineCount) || lineCount < 1 || lineCount > 100) {
@@ -150,6 +191,7 @@ export async function finalizeSaleAction(formData: FormData) {
       idempotencyKey: value(formData, "idempotencyKey"),
       paymentMethod,
       customerId: value(formData, "customerId") || null,
+      signedQuoteToken: value(formData, "signedQuoteToken") || undefined,
       items,
     });
 

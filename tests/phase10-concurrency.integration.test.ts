@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   InventoryMovementType,
   PaymentMethod,
@@ -17,14 +17,17 @@ import {
 } from "@/modules/orders/order.service";
 import { finalizeSale } from "@/modules/pos/pos.service";
 import { createProduct } from "@/modules/products/product.service";
+import { installModernPricingMock } from "./helpers/modern-pricing-mock";
 
 const suffix = randomUUID().slice(0, 8);
 const digits = suffix.replace(/\D/g, "").padEnd(8, "5").slice(0, 8);
 let owner: SessionUser;
 let cashier: SessionUser;
 let storeId: string;
+let restorePricingMock: (() => void) | undefined;
 
 beforeAll(async () => {
+  restorePricingMock = installModernPricingMock();
   const user = await prisma.user.findUniqueOrThrow({
     where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
   });
@@ -34,6 +37,8 @@ beforeAll(async () => {
     await prisma.location.findUniqueOrThrow({ where: { code: "STORE_MAIN" } })
   ).id;
 });
+
+afterAll(() => restorePricingMock?.());
 
 async function productWithOneUnit(label: string) {
   const product = await createProduct(owner, {

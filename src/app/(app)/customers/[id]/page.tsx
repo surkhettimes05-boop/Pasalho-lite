@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Role } from "@/generated/prisma/client";
+import { linkCustomerMembershipIdentityAction } from "@/app/(app)/customers/actions";
 import { requirePageRole } from "@/lib/auth/require-role";
 import { formatNepalDateTime } from "@/lib/time";
 import { getCustomerById } from "@/modules/customers/customer.service";
+import { isLoyaltyEarningEnabled } from "@/modules/loyalty/loyalty.service";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +14,13 @@ export default async function CustomerDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ success?: string }>;
+  searchParams: Promise<{ success?: string; error?: string }>;
 }) {
-  await requirePageRole([Role.OWNER_ADMIN, Role.CASHIER_STORE]);
+  const user = await requirePageRole([Role.OWNER_ADMIN, Role.CASHIER_STORE]);
   const { id } = await params;
   const query = await searchParams;
   const customer = await getCustomerById(id);
+  const loyaltyEnabled = isLoyaltyEarningEnabled();
 
   if (!customer) {
     notFound();
@@ -38,24 +41,97 @@ export default async function CustomerDetailPage({
         </Link>
       </header>
 
+      {query.success === "membership-link-updated" ? (
+        <p className="success-message" role="status">
+          The modern-trade membership identity link was updated.
+        </p>
+      ) : null}
+
+      {query.error ? (
+        <p className="error-message" role="alert">
+          Membership link could not be updated ({query.error}).
+        </p>
+      ) : null}
+
       {query.success === "created" ? (
         <p className="success-message" role="status">
           Customer created with a zero-balance loyalty account.
         </p>
       ) : null}
 
+      {user.role === Role.OWNER_ADMIN ? (
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Authoritative pricing</p>
+              <h3>Modern-trade membership identity</h3>
+              <p className="muted">
+                The link is verified against the customer phone by modern-trade.
+                Lite does not store a membership tier or status.
+              </p>
+            </div>
+          </div>
+          {customer.membershipIdentityId ? (
+            <p className="muted">
+              Linked customer reference: {customer.membershipIdentityId}
+            </p>
+          ) : (
+            <p className="muted">No modern-trade identity is linked.</p>
+          )}
+          {!customer.membershipIdentityId ? (
+            <form
+              action={linkCustomerMembershipIdentityAction}
+              className="form-grid"
+            >
+              <input type="hidden" name="customerId" value={customer.id} />
+              <label className="span-2">
+                Modern-trade customer reference
+                <input
+                  name="membershipIdentityId"
+                  inputMode="text"
+                  autoComplete="off"
+                  placeholder="Customer UUID"
+                />
+              </label>
+              <div className="form-actions span-2">
+                <button className="primary-button" type="submit">
+                  Verify and link customer
+                </button>
+              </div>
+            </form>
+          ) : null}
+          {customer.membershipIdentityId ? (
+            <form action={linkCustomerMembershipIdentityAction}>
+              <input type="hidden" name="customerId" value={customer.id} />
+              <input type="hidden" name="membershipIdentityId" value="" />
+              <button className="link-button danger-link" type="submit">
+                Unlink modern-trade customer
+              </button>
+            </form>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="summary-grid">
         <article className="summary-card">
-          <span>Points</span>
+          <span>{loyaltyEnabled ? "Points" : "Historical points"}</span>
           <strong>{customer.loyaltyAccount?.pointBalance ?? 0}</strong>
-          <small>No redemption in V1</small>
+          <small>
+            {loyaltyEnabled
+              ? "No redemption in V1"
+              : "Historical balance preserved; new earning is disabled."}
+          </small>
         </article>
         <article className="summary-card">
           <span>Spend remainder</span>
           <strong>
             Rs {customer.loyaltyAccount?.spendRemainder.toFixed(2) ?? "0.00"}
           </strong>
-          <small>Carried toward the next Rs 500 threshold</small>
+          <small>
+            {loyaltyEnabled
+              ? "Carried toward the next Rs 500 threshold"
+              : "Historical remainder is read-only"}
+          </small>
         </article>
         <article className="summary-card">
           <span>Net eligible spend</span>

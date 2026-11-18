@@ -22,20 +22,21 @@
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore": "bash scripts/db-restore.sh",
     "db:verify-restore": "tsx scripts/verify-restore.ts",
-    "release:e2e": "tsx scripts/canonical-e2e.ts",
+    "release:e2e": "node --conditions=react-server --import tsx scripts/canonical-e2e.ts",
     "admin:bootstrap-owner": "tsx scripts/bootstrap-owner.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "bcryptjs": "3.0.3",
-    "next": "16.3.8",
+    "csv-parse": "7.0.3",
+    "next": "16.4.6",
     "pg": "8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "zod": "4.6.5",
-    "csv-parse": "7.0.3",
-    "read-excel-file": "9.2.0"
+    "read-excel-file": "9.2.0",
+    "server-only": "0.0.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "22.18.0",
@@ -44,7 +45,7 @@
     "@types/react-dom": "19.2.0",
     "dotenv": "17.2.3",
     "eslint": "9.36.0",
-    "eslint-config-next": "16.3.8",
+    "eslint-config-next": "16.4.6",
     "prisma": "7.10.0",
     "tsx": "4.20.6",
     "typescript": "5.9.3",

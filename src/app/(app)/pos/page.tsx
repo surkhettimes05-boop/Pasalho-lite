@@ -5,6 +5,7 @@ import {
   createCustomerForPosAction,
   finalizeSaleAction,
   lookupCustomerForPosAction,
+  quotePosPricingAction,
 } from "@/app/(app)/pos/actions";
 import { PosRegister } from "@/components/pos-register";
 import { requirePageRole } from "@/lib/auth/require-role";
@@ -22,6 +23,18 @@ const errors: Record<string, string> = {
   INVALID_POS_INPUT: "Check the POS cart and payment method.",
   UNAUTHORIZED_ACTION: "Your role cannot finalize POS sales.",
   POS_OPERATION_FAILED: "The POS sale could not be completed.",
+  PRICING_SERVICE_UNAVAILABLE: "The authoritative pricing service is unavailable. No sale was finalized.",
+  PRICING_SERVICE_NOT_CONFIGURED: "The authoritative pricing service is not configured.",
+  QUOTE_EXPIRED: "The price quote expired. Request a new quote.",
+  QUOTE_MISMATCH: "The price quote no longer matches this cart or customer.",
+  QUOTE_REPLAY: "This price quote is already bound to another sale.",
+  QUOTE_NOT_FOUND: "The pricing quote is not recognized. Request a new quote.",
+  QUOTE_SIGNATURE_INVALID: "The pricing quote signature is invalid. Request a new quote.",
+  CUSTOMER_MISMATCH: "The customer membership changed or no longer matches this quote.",
+  DUPLICATE_SKU: "A SKU maps to multiple modern-trade products. Resolve reconciliation first.",
+  SKU_NOT_FOUND: "A cart SKU is not available in the modern-trade catalog.",
+  SKU_MISMATCH: "The modern-trade catalog returned a different SKU mapping.",
+  PRICING_SERVICE_AUTH_FAILED: "The pricing service rejected its service credentials.",
 };
 
 export const dynamic = "force-dynamic";
@@ -62,6 +75,7 @@ export default async function PosPage({
         products={products}
         idempotencyKey={randomUUID()}
         action={finalizeSaleAction}
+        quotePricing={quotePosPricingAction}
         lookupCustomer={lookupCustomerForPosAction}
         createCustomer={createCustomerForPosAction}
       />

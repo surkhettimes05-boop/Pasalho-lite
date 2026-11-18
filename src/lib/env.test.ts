@@ -4,6 +4,9 @@ import { parseEnv } from "@/lib/env";
 const base: NodeJS.ProcessEnv = {
   NODE_ENV: "production",
   DATABASE_URL: "postgresql://user:pass@db.internal:5432/pasalho",
+  MODERN_PRICING_API_URL: "https://pricing.internal",
+  MODERN_PRICING_SERVICE_TOKEN: "nonprod-pricing-token-7c12f09a6b1e4d3a",
+  MODERN_PRICING_STORE_REFERENCE: "3d1868fc-042c-4c7a-9b9b-fc615e31e3e1",
   SESSION_TTL_HOURS: "12",
 };
 

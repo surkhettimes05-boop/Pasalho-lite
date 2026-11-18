@@ -19,7 +19,10 @@ import { prisma } from "@/lib/db";
 import { getNepalOperatingDateKey } from "@/lib/time";
 import { recordSystemRefundCashMovement } from "@/modules/cash/cash.service";
 import { recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
-import { applyEligibleSpendReversal } from "@/modules/loyalty/loyalty.service";
+import {
+  applyEligibleSpendReversal,
+  isLoyaltyEarningEnabled,
+} from "@/modules/loyalty/loyalty.service";
 import {
   processReturnInputSchema,
   type ProcessReturnInput,
@@ -643,7 +646,7 @@ export async function processReturn(
               });
             }
 
-            if (source.customerId) {
+            if (source.customerId && isLoyaltyEarningEnabled()) {
               await applyEligibleSpendReversal(tx, {
                 customerId: source.customerId,
                 amount: refundTotal,

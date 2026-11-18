@@ -33,7 +33,7 @@ V1 must NOT add:
 - sales representative app
 - loyalty redemption
 - coupon engine
-- promotional campaign engine
+- local promotional campaign engine
 - automated WhatsApp API
 - eSewa/Khalti API integration
 - route optimization
@@ -133,10 +133,15 @@ Maintain the master SKU catalog used by warehouse, store, POS, and COD orders.
 
 - Do not support product variants unless represented as separate SKUs.
 - Do not support bundles/kits in V1.
-- Do not support dynamic pricing.
-- Do not support customer-specific pricing.
+- Do not calculate dynamic/member prices in Lite.
+- Do not store membership tier/status as local authority.
+- POS prices and membership eligibility come from authenticated modern-trade
+  quotes; failure to obtain or validate a quote blocks finalization.
 - Do not support scheduled price changes.
 - Do not modify historical transaction line prices after a product price change.
+
+The Lite product selling price remains an operational/catalog value and is not
+used to calculate a membership price or override a modern-trade quote.
 
 ## Inactive products
 
@@ -378,10 +383,12 @@ Complete in-store sales quickly and safely.
 - quantity change
 - item removal
 - customer phone lookup
+- masked phone, membership number, tier, and verified membership status
+- remove selected customer
 - optional new customer creation
-- visible subtotal
-- visible discount total if discounts are enabled
-- visible final total
+- automatic authoritative quote refresh when customer or cart changes
+- regular and applied unit prices, per-line savings, and promotion label
+- regular subtotal, member discount total, and final payable
 - payment method
 - finalize sale
 - receipt view/print
@@ -409,17 +416,14 @@ COD is for customer orders, not normal counter POS sale.
 
 ## Server authority
 
-The server must recalculate:
+The server must obtain and validate the authoritative modern-trade quote for
+regular/applied item prices, promotion and membership eligibility, subtotal,
+discount, and final total. Lite validates the cart and quote, then checks stock
+and records the validated quote values.
 
-- item price
-- quantity validity
-- subtotal
-- discount
-- total
-- available stock
-- loyalty effect
-
-Never trust totals sent by the browser.
+Never trust prices, discounts, tiers, or totals sent by the browser. Cashiers
+cannot enter prices/discounts or select membership tiers. An expired or invalid
+quote cannot finalize a sale.
 
 ## Finalization transaction
 
@@ -680,6 +684,11 @@ Record money received/refunded for sales and orders.
 - COD becomes PAID only when collection is confirmed.
 - Refunds create explicit refund effects.
 - Do not silently overwrite payment history.
+
+Lite COD order creation must obtain and validate a Modern-trade quote on the
+distinct `COD` channel. The order stores the accepted quote snapshot and uses
+its final total for the pending payment; a pricing-service error blocks order
+creation rather than falling back to Lite catalog prices.
 
 ## Limits
 

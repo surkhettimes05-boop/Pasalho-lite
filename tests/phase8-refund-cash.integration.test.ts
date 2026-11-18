@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   CashMovementEffect,
   CashMovementType,
@@ -13,6 +13,7 @@ import { adjustInventory } from "@/modules/inventory/inventory.service";
 import { finalizeSale } from "@/modules/pos/pos.service";
 import { createProduct } from "@/modules/products/product.service";
 import { processReturn } from "@/modules/returns/return.service";
+import { installModernPricingMock } from "./helpers/modern-pricing-mock";
 
 const suffix = randomUUID().slice(0, 8);
 
@@ -20,8 +21,10 @@ let owner: SessionUser;
 let cashier: SessionUser;
 let productId: string;
 let storeId: string;
+let restorePricingMock: (() => void) | undefined;
 
 beforeAll(async () => {
+  restorePricingMock = installModernPricingMock();
   const user = await prisma.user.findUniqueOrThrow({
     where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
   });
@@ -58,6 +61,8 @@ beforeAll(async () => {
     idempotencyKey: `p8-refund-opening-${suffix}`,
   });
 });
+
+afterAll(() => restorePricingMock?.());
 
 describe("Phase 8 refund cash integration", () => {
   it("posts exactly one REFUND_OUT for a cash refund and replay does not duplicate it", async () => {

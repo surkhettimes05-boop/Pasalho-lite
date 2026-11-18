@@ -27,7 +27,10 @@ Avoid adding fine-grained role complexity until real operations require it. All 
 | Stock adjustment | Yes | No by default | No by default |
 | Use POS | Yes | Yes | No |
 | Finalize POS sale | Yes | Yes | No |
+| Request/validate POS pricing quote | Yes | Yes | No |
 | Create customer | Yes | Yes | No |
+| Link/unlink modern-trade membership identity | Yes | No | No |
+| View SKU/pricing reconciliation report | Yes | No | No |
 | View customer purchase history | Yes | Yes as needed | No |
 | Create WhatsApp/COD order | Yes | Yes | No |
 | Confirm COD order | Yes | Yes | No |

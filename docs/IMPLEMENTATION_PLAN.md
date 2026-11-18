@@ -86,6 +86,14 @@ Exit gate:
 
 ## Phase 4 — POS
 
+### Approved authoritative-pricing prerequisite
+
+Before the Phase 4 exit gate can pass, POS must use the modern-trade signed
+pricing API. Lite must not calculate member prices locally. Quote creation,
+validation, expiry, cart/customer/channel binding, replay prevention, SKU
+reconciliation, and historical price/promotion/membership snapshots are part
+of this gate. A pricing-service failure blocks finalization.
+
 Build:
 
 - Sale
@@ -93,7 +101,7 @@ Build:
 - Payment
 - POS cart
 - barcode/search
-- server-side pricing
+- authoritative modern-trade quote request and validation (no local member-price calculation)
 - stock validation
 - cash + QR/non-cash
 - receipt

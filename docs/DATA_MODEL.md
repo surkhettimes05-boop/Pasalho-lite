@@ -224,6 +224,7 @@ Fields:
 - id
 - phoneNormalized
 - phoneDisplay
+- membershipIdentityId nullable, unique external customer identity in the authoritative modern-trade system
 - name nullable
 - notes nullable
 - active
@@ -233,6 +234,7 @@ Fields:
 Constraint:
 
 - phoneNormalized unique
+- membershipIdentityId unique when present; it is only an identity link, not a local membership tier/status record
 
 ### LoyaltyAccount
 
@@ -288,6 +290,13 @@ Fields:
 - receiptNumber
 - storeLocationId
 - customerId nullable
+- pricingQuoteId nullable, unique when present
+- pricingRuleVersion nullable
+- currency
+- membershipNumberSnapshot nullable
+- membershipTierSnapshot nullable
+- membershipStatusSnapshot nullable
+- pricingQuoteSnapshot nullable, immutable canonical quote payload
 - status
 - subtotal
 - discountTotal
@@ -316,11 +325,19 @@ Fields:
 - productNameSnapshot
 - quantity
 - unitPrice
+- regularUnitPrice nullable for historical rows
+- appliedUnitPrice nullable for historical rows
 - discountAmount
 - lineTotal
 - unitCostSnapshot nullable
+- pricingQuoteId nullable
+- promotionReference nullable
+- promotionSnapshot nullable
+- currency nullable
 
 Historical snapshots protect receipts from later product edits.
+New POS sales persist the authoritative modern-trade quote snapshot. Existing
+sales remain unchanged and retain their original nullable pricing fields.
 
 ### Payment
 
@@ -366,6 +383,8 @@ Fields:
 - discountTotal
 - deliveryCharge
 - total
+- pricingQuoteId nullable
+- pricingQuoteSnapshot nullable
 - paymentMethod
 - paymentStatus
 - notes nullable
@@ -400,6 +419,11 @@ Fields:
 - unitPrice
 - discountAmount
 - lineTotal
+
+The accepted COD quote snapshot records authoritative regular/applied prices,
+membership eligibility, promotion version, channel, and pricing-rule version.
+Legacy orders without a quote snapshot retain their historical recorded
+amounts.
 
 ### InventoryReservation
 

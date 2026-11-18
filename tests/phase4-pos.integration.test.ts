@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   InventoryMovementType,
   PaymentMethod,
@@ -12,11 +12,18 @@ import { AuthorizationError } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
+import {
+  getPosMembershipSnapshot,
+  quotePosPricing,
+} from "@/modules/pricing/pricing.service";
 import { reconcileInventoryBalance } from "@/modules/inventory/inventory.service";
+import { createCustomer } from "@/modules/customers/customer.service";
 import { finalizeSale } from "@/modules/pos/pos.service";
 import { createProduct, updateProduct } from "@/modules/products/product.service";
 import { postPurchaseReceipt } from "@/modules/receiving/receipt.service";
 import { createSupplier } from "@/modules/receiving/supplier.service";
+import { installModernPricingMock } from "./helpers/modern-pricing-mock";
+import type { ModernPricingMockCleanup } from "./helpers/modern-pricing-mock";
 import {
   createTransfer,
   dispatchTransfer,
@@ -33,8 +40,10 @@ let warehouseActor: SessionUser;
 let productId: string;
 let storeId: string;
 let primarySaleId: string;
+let restorePricingMock: ModernPricingMockCleanup | undefined;
 
 beforeAll(async () => {
+  restorePricingMock = installModernPricingMock();
   const ownerRecord = await prisma.user.findUniqueOrThrow({
     where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
   });
@@ -122,6 +131,8 @@ beforeAll(async () => {
     ],
   });
 });
+
+afterAll(() => restorePricingMock?.());
 
 async function storeBalance() {
   return prisma.stockBalance.findUniqueOrThrow({
@@ -275,6 +286,107 @@ describe("Phase 4 POS", () => {
     ).toBe(1);
   });
 
+  it("persists authoritative member prices, promotion, and quote snapshots", async () => {
+    const customer = await createCustomer(cashier, {
+      phone: `96${suffix.replace(/\D/g, "").padEnd(8, "6").slice(0, 8)}`,
+      name: "Pricing Quote Member",
+      notes: "",
+    });
+    const membershipIdentityId = randomUUID();
+    await prisma.customer.update({
+      where: { id: customer.id },
+      data: { membershipIdentityId },
+    });
+
+    const result = await finalizeSale(cashier, {
+      idempotencyKey: `phase4-member-pricing-${suffix}`,
+      paymentMethod: PaymentMethod.CASH,
+      customerId: customer.id,
+      items: [{ productId, quantity: "1" }],
+    });
+
+    expect(result.sale.subtotal.toFixed(2)).toBe("100.00");
+    expect(result.sale.discountTotal.toFixed(2)).toBe("5.00");
+    expect(result.sale.total.toFixed(2)).toBe("95.00");
+    expect(result.sale.pricingQuoteId).toBeTruthy();
+    expect(result.sale.pricingRuleVersion).toBe(1);
+    expect(result.sale.currency).toBe("NPR");
+    expect(result.sale.membershipTierSnapshot).toBe("REGISTERED_MEMBER");
+    expect(result.sale.membershipStatusSnapshot).toBe("ACTIVE");
+    expect(result.sale.membershipNumberSnapshot).toBe(1);
+    expect(result.sale.pricingQuoteSnapshot).toMatchObject({
+      customerReference: membershipIdentityId,
+      membershipNumber: 1,
+      discountTotal: "5.00",
+      finalTotal: "95.00",
+    });
+    expect(result.sale.items[0].regularUnitPrice?.toFixed(2)).toBe("100.00");
+    expect(result.sale.items[0].appliedUnitPrice?.toFixed(2)).toBe("95.00");
+    expect(result.sale.items[0].discountAmount.toFixed(2)).toBe("5.00");
+    expect(result.sale.items[0].lineTotal.toFixed(2)).toBe("100.00");
+    expect(result.sale.items[0].promotionSnapshot).toMatchObject({
+      name: "Test member promotion",
+    });
+    expect(result.payment.amount.toFixed(2)).toBe("95.00");
+    expect((await storeBalance()).onHand.toString()).toBe("16");
+  });
+
+  it("uses authoritative founding tier and excludes suspended members", async () => {
+    const founding = await createCustomer(cashier, {
+      phone: `91${suffix.replace(/\D/g, "").padEnd(8, "1").slice(0, 8)}`,
+      name: "Founding Pricing Member",
+      notes: "",
+    });
+    const foundingIdentity = randomUUID();
+    await prisma.customer.update({
+      where: { id: founding.id },
+      data: { membershipIdentityId: foundingIdentity },
+    });
+    restorePricingMock?.setMembershipProfile(foundingIdentity, {
+      membershipNumber: 1000,
+      membershipTier: "FOUNDING_1000",
+      membershipStatus: "ACTIVE",
+    });
+    expect(await getPosMembershipSnapshot(cashier, founding.id)).toMatchObject({
+      membershipNumber: 1000,
+      membershipTier: "FOUNDING_1000",
+      membershipStatus: "ACTIVE",
+    });
+
+    const foundingQuote = await quotePosPricing(cashier, {
+      customerId: founding.id,
+      items: [{ productId, quantity: "1.25" }],
+    });
+    expect(foundingQuote.membershipNumber).toBe(1000);
+    expect(foundingQuote.membershipTier).toBe("FOUNDING_1000");
+    expect(foundingQuote.items[0].lineDiscount).toBe("6.25");
+    expect(foundingQuote.items[0].lineTotal).toBe("118.75");
+
+    const suspended = await createCustomer(cashier, {
+      phone: `92${suffix.replace(/\D/g, "").padEnd(8, "2").slice(0, 8)}`,
+      name: "Suspended Pricing Member",
+      notes: "",
+    });
+    const suspendedIdentity = randomUUID();
+    await prisma.customer.update({
+      where: { id: suspended.id },
+      data: { membershipIdentityId: suspendedIdentity },
+    });
+    restorePricingMock?.setMembershipProfile(suspendedIdentity, {
+      membershipNumber: 52,
+      membershipTier: "REGISTERED_MEMBER",
+      membershipStatus: "SUSPENDED",
+    });
+
+    const suspendedQuote = await quotePosPricing(cashier, {
+      customerId: suspended.id,
+      items: [{ productId, quantity: "1" }],
+    });
+    expect(suspendedQuote.membershipStatus).toBe("SUSPENDED");
+    expect(suspendedQuote.items[0].appliedUnitPrice).toBe("100.00");
+    expect(suspendedQuote.discountTotal).toBe("0.00");
+  });
+
   it("rejects reuse of POS idempotency key for a different command", async () => {
     await expect(
       finalizeSale(cashier, {
@@ -291,7 +403,7 @@ describe("Phase 4 POS", () => {
       code: "IDEMPOTENCY_CONFLICT",
     });
 
-    expect((await storeBalance()).onHand.toString()).toBe("17");
+    expect((await storeBalance()).onHand.toString()).toBe("16");
   });
 
   it("preserves historical sale price after product price changes", async () => {
@@ -320,13 +432,16 @@ describe("Phase 4 POS", () => {
     expect(historicalItem.lineTotal.toFixed(2)).toBe("300.00");
   });
 
-  it("ignores manipulated client price/total fields and uses current server price", async () => {
+  it("rejects manual price, discount, and membership-tier fields", async () => {
+    const before = await storeBalance();
+    const key = `phase4-manipulated-${suffix}`;
     const manipulated = {
-      idempotencyKey: `phase4-manipulated-${suffix}`,
+      idempotencyKey: key,
       paymentMethod: PaymentMethod.QR_NON_CASH,
       clientTotal: "1.00",
       clientUnitPrice: "1.00",
       discountTotal: "9999.00",
+      membershipTier: "FOUNDING_1000",
       items: [
         {
           productId,
@@ -336,15 +451,11 @@ describe("Phase 4 POS", () => {
       ],
     } as unknown as Parameters<typeof finalizeSale>[1];
 
-    const result = await finalizeSale(cashier, manipulated);
-
-    expect(result.sale.subtotal.toFixed(2)).toBe("120.00");
-    expect(result.sale.discountTotal.toFixed(2)).toBe("0.00");
-    expect(result.sale.total.toFixed(2)).toBe("120.00");
-    expect(result.sale.items[0].unitPrice.toFixed(2)).toBe("120.00");
-    expect(result.payment.amount.toFixed(2)).toBe("120.00");
-    expect(result.payment.method).toBe(PaymentMethod.QR_NON_CASH);
-    expect((await storeBalance()).onHand.toString()).toBe("16");
+    await expect(finalizeSale(cashier, manipulated)).rejects.toThrow();
+    expect((await storeBalance()).onHand.toString()).toBe(
+      before.onHand.toString(),
+    );
+    expect(await prisma.sale.count({ where: { idempotencyKey: key } })).toBe(0);
   });
 
   it("rejects insufficient available stock with zero partial records", async () => {

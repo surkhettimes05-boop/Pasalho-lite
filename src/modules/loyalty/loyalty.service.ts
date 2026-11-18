@@ -6,6 +6,25 @@ import {
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
 
+export function isLoyaltyEarningEnabled() {
+  const value = process.env.LOYALTY_EARN_ENABLED;
+  return value === undefined ? true : value !== "false";
+}
+
+export function isLoyaltyRedemptionEnabled() {
+  const value = process.env.LOYALTY_REDEMPTION_ENABLED;
+  return value === "true";
+}
+
+export function assertLoyaltyWriteAllowed(kind: "EARN" | "REVERSAL") {
+  if (!isLoyaltyEarningEnabled()) {
+    throw new BusinessError(
+      "LOYALTY_DISABLED",
+      `Loyalty ${kind.toLowerCase()} is disabled under the launch cutover policy. Historical balances remain preserved and read-only.`,
+    );
+  }
+}
+
 export const LOYALTY_THRESHOLD = new Prisma.Decimal(500);
 
 function projectionFromEligibleSpend(eligibleSpend: Prisma.Decimal) {
@@ -54,6 +73,8 @@ export async function applyEligibleSpend(
     reason?: string | null;
   },
 ) {
+  assertLoyaltyWriteAllowed("EARN");
+
   if (!input.eligibleSpend.greaterThan(0)) {
     throw new BusinessError(
       "INVALID_LOYALTY_SPEND",
@@ -141,6 +162,8 @@ export async function applyEligibleSpendReversal(
     reason: string;
   },
 ) {
+  assertLoyaltyWriteAllowed("REVERSAL");
+
   if (!input.amount.greaterThan(0)) {
     throw new BusinessError(
       "INVALID_LOYALTY_REVERSAL",

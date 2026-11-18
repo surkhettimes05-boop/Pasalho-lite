@@ -1,12 +1,25 @@
 import { z } from "zod";
 
+const booleanStringFlag = z.preprocess(
+  (value) => (value === undefined ? "true" : value),
+  z.enum(["true", "false"]).transform((value) => value === "true"),
+);
+
 const baseEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_ENV: z.enum(["development", "test", "staging", "production"]).default("development"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
   APP_URL: z.string().url().default("http://localhost:3000"),
+  MODERN_PRICING_API_URL: z.string().url().optional(),
+  MODERN_PRICING_SERVICE_TOKEN: z.string().min(32).optional(),
+  MODERN_PRICING_STORE_REFERENCE: z.string().uuid().optional(),
   SESSION_TTL_HOURS: z.coerce.number().int().positive().max(168).default(12),
+  LOYALTY_EARN_ENABLED: booleanStringFlag,
+  LOYALTY_REDEMPTION_ENABLED: z.preprocess(
+    (value) => (value === undefined ? "false" : value),
+    z.enum(["true", "false"]).transform((value) => value === "true"),
+  ),
 });
 
 export function parseEnv(input: Record<string, string | undefined>) {
@@ -29,6 +42,33 @@ export function parseEnv(input: Record<string, string | undefined>) {
     ) {
       throw new Error(
         "Production AUTH_SECRET must be a unique random value of at least 48 characters.",
+      );
+    }
+
+    if (
+      !parsed.MODERN_PRICING_API_URL ||
+      !parsed.MODERN_PRICING_SERVICE_TOKEN ||
+      !parsed.MODERN_PRICING_STORE_REFERENCE
+    ) {
+      throw new Error(
+        "Production requires the authoritative member pricing service configuration.",
+      );
+    }
+
+    const pricingUrl = new URL(parsed.MODERN_PRICING_API_URL);
+    if (pricingUrl.protocol !== "https:" || pricingUrl.pathname !== "/") {
+      throw new Error(
+        "Production member pricing API URL must be an HTTPS origin.",
+      );
+    }
+
+    if (
+      /replace|changeme|example|secret/i.test(
+        parsed.MODERN_PRICING_SERVICE_TOKEN,
+      )
+    ) {
+      throw new Error(
+        "Production member pricing service token must be a unique random value.",
       );
     }
   }
