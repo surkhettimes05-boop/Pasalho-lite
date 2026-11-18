@@ -1,8 +1,8 @@
 import "dotenv/config";
+import { randomUUID } from "node:crypto";
+import { Pool } from "pg";
 import { hash } from "bcryptjs";
 import { z } from "zod";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, LocationType, Role } from "../src/generated/prisma/client";
 
 const seedEnvSchema = z.object({
   APP_ENV: z.enum(["development", "test", "staging", "production"]).default("development"),
@@ -20,61 +20,47 @@ if (env.APP_ENV === "production") {
   );
 }
 
-const adapter = new PrismaPg({ connectionString: env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
+const pool = new Pool({ connectionString: env.DATABASE_URL });
 
 async function main() {
   const passwordHash = await hash(env.SEED_OWNER_PASSWORD, 12);
   const email = env.SEED_OWNER_EMAIL.trim().toLowerCase();
+  const client = await pool.connect();
 
-  await prisma.$transaction([
-    prisma.location.upsert({
-      where: { code: "WAREHOUSE_MAIN" },
-      update: {
-        name: "Central Warehouse",
-        type: LocationType.WAREHOUSE,
-        active: true,
-      },
-      create: {
-        code: "WAREHOUSE_MAIN",
-        name: "Central Warehouse",
-        type: LocationType.WAREHOUSE,
-        active: true,
-      },
-    }),
-    prisma.location.upsert({
-      where: { code: "STORE_MAIN" },
-      update: {
-        name: "Pasalho Store",
-        type: LocationType.STORE,
-        active: true,
-      },
-      create: {
-        code: "STORE_MAIN",
-        name: "Pasalho Store",
-        type: LocationType.STORE,
-        active: true,
-      },
-    }),
-    prisma.user.upsert({
-      where: { email },
-      update: {
-        name: env.SEED_OWNER_NAME,
-        passwordHash,
-        role: Role.OWNER_ADMIN,
-        active: true,
-      },
-      create: {
-        name: env.SEED_OWNER_NAME,
-        email,
-        passwordHash,
-        role: Role.OWNER_ADMIN,
-        active: true,
-      },
-    }),
-  ]);
-
-  console.log("Seeded one warehouse, one store, and the owner/admin account.");
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO "Location" (id, code, name, type, active, "createdAt", "updatedAt")
+       VALUES ($1, 'WAREHOUSE_MAIN', 'Central Warehouse', 'WAREHOUSE', TRUE, NOW(), NOW())
+       ON CONFLICT (code) DO UPDATE
+         SET name = EXCLUDED.name, type = EXCLUDED.type,
+             active = TRUE, "updatedAt" = NOW()`,
+      [randomUUID()],
+    );
+    await client.query(
+      `INSERT INTO "Location" (id, code, name, type, active, "createdAt", "updatedAt")
+       VALUES ($1, 'STORE_MAIN', 'Pasalho Store', 'STORE', TRUE, NOW(), NOW())
+       ON CONFLICT (code) DO UPDATE
+         SET name = EXCLUDED.name, type = EXCLUDED.type,
+             active = TRUE, "updatedAt" = NOW()`,
+      [randomUUID()],
+    );
+    await client.query(
+      `INSERT INTO "User" (id, name, email, "passwordHash", role, active, "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, 'OWNER_ADMIN', TRUE, NOW(), NOW())
+       ON CONFLICT (email) DO UPDATE
+         SET name = EXCLUDED.name, "passwordHash" = EXCLUDED."passwordHash",
+             role = 'OWNER_ADMIN', active = TRUE, "updatedAt" = NOW()`,
+      [randomUUID(), env.SEED_OWNER_NAME, email, passwordHash],
+    );
+    await client.query("COMMIT");
+    console.log("Seeded one warehouse, one store, and the owner/admin account.");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 main()
@@ -83,5 +69,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await pool.end();
   });

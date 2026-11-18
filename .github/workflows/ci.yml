@@ -48,8 +48,11 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Activate repository-pinned npm
+        run: npm install --global npm@10.9.2
+
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Production dependency high-severity audit
         run: npm audit --omit=dev --audit-level=high
@@ -169,6 +172,9 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Cloudflare Workers OpenNext build
+        run: npm run cloudflare:build
 
       - name: Boot smoke test
         shell: bash

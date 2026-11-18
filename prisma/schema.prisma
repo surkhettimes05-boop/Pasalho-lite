@@ -1,7 +1,8 @@
 generator client {
   provider = "prisma-client"
-  runtime  = "cloudflare"
+  runtime  = "nodejs"
   output   = "../src/generated/prisma"
+  importFileExtension = "ts"
 }
 
 datasource db {
@@ -130,6 +131,22 @@ enum CashMovementEffect {
 enum DailyCloseStatus {
   CLOSED
   REOPENED
+}
+
+model CreatorAttributionOutbox {
+  id             String   @id @default(uuid())
+  saleId         String   @unique
+  eventKey       String   @unique
+  payload        Json
+  status         String   @default("PENDING")
+  attemptCount   Int      @default(0)
+  nextAttemptAt  DateTime @default(now())
+  lastErrorCode  String?
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
 }
 
 model User {
