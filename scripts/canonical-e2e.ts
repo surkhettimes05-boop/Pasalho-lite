@@ -34,6 +34,7 @@ import {
   receiveTransfer,
 } from "../src/modules/transfers/transfer.service";
 import { CashMovementType } from "../src/generated/prisma/client";
+import { installModernPricingMock } from "../tests/helpers/modern-pricing-mock";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -45,6 +46,8 @@ function eq(actual: string | number, expected: string | number, label: string) {
     `${label}: expected ${expected}, got ${actual}`,
   );
 }
+
+const restorePricingMock = installModernPricingMock();
 
 const suffix = randomUUID().slice(0, 8);
 const ownerRecord = await prisma.user.findUniqueOrThrow({
@@ -335,6 +338,8 @@ try {
 } finally {
   await reloaded.$disconnect();
 }
+
+restorePricingMock();
 
 console.log(JSON.stringify({
   status: "ok",
