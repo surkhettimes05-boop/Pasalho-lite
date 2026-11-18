@@ -88,9 +88,16 @@ const supplier = await createSupplier(owner, {
 await postPurchaseReceipt(warehouse, {
   supplierId: supplier.id,
   supplierReference: `E2E-REC-${suffix}`,
-  notes: "Canonical +100 receipt",
+  notes: "Canonical first cost layer",
   idempotencyKey: `e2e-receipt-${suffix}`,
   items: [{ productId: product.id, quantity: "100", unitCost: "100.00" }],
+});
+await postPurchaseReceipt(warehouse, {
+  supplierId: supplier.id,
+  supplierReference: `E2E-REC2-${suffix}`,
+  notes: "Canonical second cost layer",
+  idempotencyKey: `e2e-receipt2-${suffix}`,
+  items: [{ productId: product.id, quantity: "100", unitCost: "120.00" }],
 });
 
 let warehouseBalance = await prisma.stockBalance.findUniqueOrThrow({
@@ -101,7 +108,8 @@ let warehouseBalance = await prisma.stockBalance.findUniqueOrThrow({
     },
   },
 });
-eq(warehouseBalance.onHand.toString(), "100", "warehouse after receipt");
+eq(warehouseBalance.onHand.toString(), "200", "warehouse after receipts");
+eq(warehouseBalance.averageUnitCost?.toFixed(2) ?? "MISSING", "110.00", "warehouse moving-average cost");
 
 const transfer = await createTransfer(warehouse, {
   notes: "Canonical transfer 20",
@@ -111,6 +119,9 @@ await markTransferReady(warehouse, transfer.id);
 const dispatchedTransfer = await dispatchTransfer(warehouse, transfer.id, {
   idempotencyKey: `e2e-transfer-dispatch-${suffix}`,
 });
+const dispatchedItem = dispatchedTransfer.items.find((item) => item.productId === product.id);
+assert(dispatchedItem, "transfer item exists after dispatch");
+eq(dispatchedItem.unitCostSnapshot?.toFixed(2) ?? "MISSING", "110.00", "transfer cost snapshot");
 
 warehouseBalance = await prisma.stockBalance.findUniqueOrThrow({
   where: {
@@ -128,7 +139,7 @@ let storeBalance = await prisma.stockBalance.findUniqueOrThrow({
     },
   },
 });
-eq(warehouseBalance.onHand.toString(), "80", "warehouse after dispatch");
+eq(warehouseBalance.onHand.toString(), "180", "warehouse after dispatch");
 eq(storeBalance.onHand.toString(), "0", "store before transfer receive");
 
 await receiveTransfer(cashier, transfer.id, {
@@ -149,13 +160,32 @@ storeBalance = await prisma.stockBalance.findUniqueOrThrow({
   },
 });
 eq(storeBalance.onHand.toString(), "20", "store after transfer receive");
+eq(storeBalance.averageUnitCost?.toFixed(2) ?? "MISSING", "110.00", "store moving-average cost after transfer");
 
-await finalizeSale(cashier, {
+const posDigits = suffix.replace(/\D/g, "").padEnd(8, "5").slice(0, 8);
+const posCustomer = await createCustomer(cashier, {
+  phone: `98${posDigits}`,
+  name: "Canonical POS Attribution Customer",
+  notes: "",
+});
+
+const posSale = await finalizeSale(cashier, {
   idempotencyKey: `e2e-pos-${suffix}`,
   paymentMethod: PaymentMethod.CASH,
-  customerId: null,
+  customerId: posCustomer.id,
   items: [{ productId: product.id, quantity: "3" }],
 });
+
+const posSaleItem = posSale.sale.items.find((item) => item.productId === product.id);
+assert(posSaleItem, "POS sale item exists after finalization");
+eq(posSaleItem.unitCostSnapshot?.toFixed(2) ?? "MISSING", "110.00", "POS sale-time unit cost snapshot");
+const posCreatorOutbox = await prisma.creatorAttributionOutbox.findUnique({
+  where: { saleId: posSale.sale.id },
+});
+assert(posCreatorOutbox, "customer-linked POS sale creates creator attribution outbox event");
+const posCreatorPayload = posCreatorOutbox.payload as Record<string, unknown>;
+eq(String(posCreatorPayload.costOfGoodsNpr), "330.00", "POS creator outbox COGS snapshot");
+eq(String(posCreatorPayload.costEvidenceStatus), "AVAILABLE", "POS creator cost evidence status");
 
 storeBalance = await prisma.stockBalance.findUniqueOrThrow({
   where: {

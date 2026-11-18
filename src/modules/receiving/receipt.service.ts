@@ -9,7 +9,7 @@ import { assertRole } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
-import { recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
+import { applyInboundAverageUnitCost, recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
 import {
   postReceiptInputSchema,
   type PostReceiptInput,
@@ -172,7 +172,16 @@ export async function postPurchaseReceipt(
           const quantity = new Prisma.Decimal(item.quantity);
           const unitCost = new Prisma.Decimal(item.unitCost);
           const lineTotal = quantity.mul(unitCost).toDecimalPlaces(2);
-
+          const balanceBefore = await tx.stockBalance.findUnique({
+            where: {
+              productId_locationId: {
+                productId: item.productId,
+                locationId: warehouse.id,
+              },
+            },
+          });
+          const previousQuantity = balanceBefore?.onHand ?? new Prisma.Decimal(0);
+          const previousAverageCost = balanceBefore?.averageUnitCost ?? null;
           await tx.purchaseReceiptItem.create({
             data: {
               purchaseReceiptId: receipt.id,
@@ -193,6 +202,14 @@ export async function postPurchaseReceipt(
             idempotencyKey: `${parsed.idempotencyKey}:${item.productId}`,
             reason: `Receipt ${receipt.receiptNumber}`,
             actorUserId: actor.id,
+          });
+          await applyInboundAverageUnitCost(tx, {
+            productId: item.productId,
+            locationId: warehouse.id,
+            previousQuantity,
+            previousAverageUnitCost: previousAverageCost,
+            incomingQuantity: quantity,
+            incomingUnitCost: unitCost,
           });
         }
 

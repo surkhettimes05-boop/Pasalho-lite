@@ -9,7 +9,7 @@ import { assertRole } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
-import { recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
+import { applyInboundAverageUnitCost, recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
 import {
   createTransferInputSchema,
   dispatchTransferInputSchema,
@@ -380,6 +380,15 @@ export async function dispatchTransfer(
 
       for (const item of transfer.items) {
         const quantity = item.requestedQuantity;
+        const sourceBalance = await tx.stockBalance.findUnique({
+          where: {
+            productId_locationId: {
+              productId: item.productId,
+              locationId: transfer.fromLocationId,
+            },
+          },
+        });
+        const unitCostSnapshot = sourceBalance?.averageUnitCost ?? null;
 
         await recordPhysicalInventoryMovement(tx, {
           productId: item.productId,
@@ -397,6 +406,7 @@ export async function dispatchTransfer(
           where: { id: item.id },
           data: {
             dispatchedQuantity: quantity,
+            unitCostSnapshot,
           },
         });
       }
@@ -539,6 +549,17 @@ export async function receiveTransfer(
         }
 
         if (received.greaterThan(0)) {
+          const destinationBalance = await tx.stockBalance.findUnique({
+            where: {
+              productId_locationId: {
+                productId: item.productId,
+                locationId: transfer.toLocationId,
+              },
+            },
+          });
+          const previousQuantity = destinationBalance?.onHand ?? new Prisma.Decimal(0);
+          const previousAverageCost = destinationBalance?.averageUnitCost ?? null;
+          const incomingUnitCost = item.unitCostSnapshot;
           await recordPhysicalInventoryMovement(tx, {
             productId: item.productId,
             locationId: transfer.toLocationId,
@@ -549,6 +570,15 @@ export async function receiveTransfer(
             idempotencyKey: `transfer-receive:${parsed.idempotencyKey}:${item.id}`,
             reason: `Receive ${transfer.transferNumber}`,
             actorUserId: actor.id,
+          });
+
+          await applyInboundAverageUnitCost(tx, {
+            productId: item.productId,
+            locationId: transfer.toLocationId,
+            previousQuantity,
+            previousAverageUnitCost: previousAverageCost,
+            incomingQuantity: received,
+            incomingUnitCost,
           });
         }
 

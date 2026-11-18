@@ -318,6 +318,17 @@ async function finalizeSaleTransaction(
           "The validated pricing quote has inconsistent totals.",
         );
       }
+      const costEvidenceComplete = preparedItems.every(
+        (item) => item.unitCostSnapshot !== null,
+      );
+      const costOfGoods = costEvidenceComplete
+        ? preparedItems
+            .reduce(
+              (sum, item) => sum.add(item.unitCostSnapshot!.mul(item.quantity)),
+              new Prisma.Decimal(0),
+            )
+            .toDecimalPlaces(2)
+        : null;
       const now = new Date();
 
       const sale = await tx.sale.create({
@@ -417,6 +428,8 @@ async function finalizeSaleTransaction(
               customerPhoneHash,
               currency: "NPR",
               eligibleSpendNpr: total.toFixed(2),
+              cogsNpr: costOfGoods?.toFixed(2) ?? null,
+              costStatus: costEvidenceComplete ? "VERIFIED" : "UNKNOWN",
               completedAt: now.toISOString(),
             },
           },
