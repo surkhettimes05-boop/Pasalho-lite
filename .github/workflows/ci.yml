@@ -180,8 +180,8 @@ jobs:
       - name: Production build
         run: npm run build
 
-      - name: Cloudflare Workers OpenNext build
-        run: npm run cloudflare:build
+      # Provider-specific packaging will be added once hosting is selected.
+      # For now, verify the standard Next.js build and live HTTP readiness.
 
       - name: Boot smoke test
         shell: bash
