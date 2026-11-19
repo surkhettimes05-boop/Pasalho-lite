@@ -156,6 +156,13 @@ jobs:
             npm run db:migrate:deploy
 
       - name: Canonical end-to-end release test
+        # The release script installs an in-process Modern pricing mock. Supply
+        # synthetic credentials only to this step; production still requires
+        # the real authoritative service and never falls back to local prices.
+        env:
+          MODERN_PRICING_API_URL: http://modern-pricing.test
+          MODERN_PRICING_SERVICE_TOKEN: lite-integration-test-service-token-that-is-not-production
+          MODERN_PRICING_STORE_REFERENCE: 3d1868fc-042c-4c7a-9b9b-fc615e31e3e1
         shell: bash
         run: |
           docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
