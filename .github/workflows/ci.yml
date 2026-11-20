@@ -38,6 +38,9 @@ jobs:
       SEED_OWNER_EMAIL: owner@ci.pasalho.test
       SEED_OWNER_PASSWORD: ci-owner-password-change-outside-ci
       SEED_OWNER_NAME: CI Owner
+      MODERN_PRICING_API_URL: https://pricing.test.pasalho.local
+      MODERN_PRICING_SERVICE_TOKEN: ci-modern-pricing-service-token-at-least-32-characters
+      MODERN_PRICING_STORE_REFERENCE: "00000000-0000-4000-8000-000000000001"
 
     steps:
       - name: Checkout
