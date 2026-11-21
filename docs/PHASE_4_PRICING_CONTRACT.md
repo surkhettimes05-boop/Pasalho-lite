@@ -47,6 +47,22 @@ service error.
   migrations. It has no separate migration credential or runtime-role posture
   check; Modern Trade has both and those checks were exercised separately.
 
+## Pilot database-role decision
+
+On 2026-11-21, the requester accepted one database role for Lite runtime and
+migrations for the initial pilot. This keeps the current single-
+`DATABASE_URL` deployment model. The requester accepts that this credential has
+the permissions needed by both the application and migrations, so the runtime
+connection also retains migration-level privileges. Separate runtime/migration
+role isolation is deferred for the pilot and should be revisited before scaling
+or expanding the deployment.
+
+This decision does not verify the effective staging or production connection.
+Before launch, the database owner must verify the configured database identity
+read-only, confirm migrations are run only by the release process, and confirm
+the credential is scoped to the intended Lite database and protected by the
+secret manager. No production database identity was inspected for this report.
+
 These checks are not a live Lite-to-staging-service test. Do not interpret the
 test mock or local Fastify/PostgreSQL route tests as evidence of staging
 credentials, network reachability, or deployed configuration.
@@ -62,8 +78,7 @@ fault injection against staging while keeping real customer orders disabled.
 No production credential, database, or customer record is required for that
 evidence.
 
-The Lite database owner must also decide whether a separate least-privilege
-runtime role and migration-only role are required for this deployment. If so,
-the Lite repository needs an approved credential-split and permission-check
-design; current launch evidence covers schema behavior and recovery, not
-runtime role isolation.
+The accepted pilot model uses one role, as recorded above. Staging still needs
+read-only verification of the effective database identity, secret-manager
+configuration, and that migrations are not run automatically on app startup.
+Production configuration was not inspected.
