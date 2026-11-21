@@ -177,6 +177,9 @@ jobs:
             -c 'CREATE DATABASE pasalho_e2e_test;'
 
           export TEST_DATABASE_URL='postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_e2e_test?schema=public'
+          export MODERN_PRICING_API_URL='https://modern-pricing.test'
+          export MODERN_PRICING_SERVICE_TOKEN='phase-four-disposable-e2e-token-not-a-secret'
+          export MODERN_PRICING_STORE_REFERENCE='3d1868fc-042c-4c7a-9b9b-fc615e31e3e1'
           npm run release:e2e
 
       - name: Production build
