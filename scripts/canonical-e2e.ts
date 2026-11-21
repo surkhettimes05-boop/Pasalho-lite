@@ -10,7 +10,7 @@ if (process.env.TEST_DATABASE_URL) {
 // Import application modules only after selecting the disposable database.
 // Their environment and Prisma clients are initialized during module loading.
 const [
-  { randomUUID },
+  { randomInt, randomUUID },
   { PrismaPg },
   { PaymentMethod, PrismaClient, Role, CashMovementType },
   { prisma },
@@ -66,7 +66,8 @@ function eq(actual: string | number, expected: string | number, label: string) {
 
 const restorePricingMock = installModernPricingMock();
 
-const suffix = randomUUID().slice(0, 8);
+// Customer phone fixtures must remain numeric and unique across repeated runs.
+const suffix = String(randomInt(10_000_000, 100_000_000));
 const ownerRecord = await prisma.user.findUniqueOrThrow({
   where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
 });
@@ -182,7 +183,7 @@ storeBalance = await prisma.stockBalance.findUniqueOrThrow({
 eq(storeBalance.onHand.toString(), "20", "store after transfer receive");
 eq(storeBalance.averageUnitCost?.toFixed(2) ?? "MISSING", "110.00", "store moving-average cost after transfer");
 
-const posDigits = suffix.replace(/\D/g, "").padEnd(8, "5").slice(0, 8);
+const posDigits = suffix;
 const posCustomer = await createCustomer(cashier, {
   phone: `98${posDigits}`,
   name: "Canonical POS Attribution Customer",
@@ -217,7 +218,7 @@ storeBalance = await prisma.stockBalance.findUniqueOrThrow({
 });
 eq(storeBalance.onHand.toString(), "17", "store after POS sale");
 
-const digits = suffix.replace(/\D/g, "").padEnd(8, "6").slice(0, 8);
+const digits = String(randomInt(10_000_000, 100_000_000));
 const customer = await createCustomer(cashier, {
   phone: `98${digits}`,
   name: "Canonical E2E Customer",
