@@ -54,6 +54,7 @@
   },
   "overrides": {
     "deepmerge-ts": "8.0.0",
+    "effect": "3.22.1",
     "mysql2": "3.23.1"
   },
   "packageManager": "npm@10.9.2"
