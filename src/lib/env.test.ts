@@ -23,15 +23,29 @@ describe("production environment validation", () => {
     expect(parsed.ENABLE_REAL_CUSTOMER_ORDERS).toBe(false);
   });
 
-  it("rejects enabling real customer orders in production", () => {
-    expect(() => parseEnv({
+  it("accepts the explicit order gate only with hardened production configuration", () => {
+    const parsed = parseEnv({
       ...base,
       APP_ENV: "production",
       APP_URL: "https://pasalho.example.com",
       AUTH_SECRET:
         "9Qf7kL2mN8rT4vX6zA1cD3eG5hJ7pS9uW2yB4nM6qR8tV1xZ",
       ENABLE_REAL_CUSTOMER_ORDERS: "true",
-    })).toThrow(/must remain false in production/);
+    });
+
+    expect(parsed.ENABLE_REAL_CUSTOMER_ORDERS).toBe(true);
+  });
+
+  it("applies production checks when NODE_ENV is production without APP_ENV", () => {
+    expect(() =>
+      parseEnv({
+        ...base,
+        APP_ENV: undefined,
+        NODE_ENV: "production",
+        APP_URL: "http://pasalho.example.com",
+        AUTH_SECRET: "x".repeat(64),
+      }),
+    ).toThrow(/HTTPS/);
   });
 
   it("rejects non-HTTPS production APP_URL", () => {

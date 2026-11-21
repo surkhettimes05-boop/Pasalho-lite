@@ -62,8 +62,11 @@ database on localhost.
 
 ## Remaining constraints
 
-- `ENABLE_REAL_CUSTOMER_ORDERS` defaults to false and production configuration
-  rejects true. Real customer order creation remains disabled for launch.
+- `ENABLE_REAL_CUSTOMER_ORDERS` defaults to false. Keep it false in every
+  production environment until credentialed end-to-end verification passes and
+  the owner explicitly approves controlled order enablement. Production
+  security validation still runs whenever `NODE_ENV` is production, including
+  when `APP_ENV` is omitted.
 - Post-dispatch COD recovery is supported only when all remaining items are
   physically returned together; partial failed-delivery recovery remains
   unsupported as specified by the existing V1 workflow.

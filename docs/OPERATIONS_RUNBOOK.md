@@ -46,6 +46,12 @@ The bootstrap refuses to run if an active Owner/Admin already exists. It creates
 
 Do not use `prisma db push` in production.
 
+Keep `ENABLE_REAL_CUSTOMER_ORDERS=false` in production until credentialed
+end-to-end verification has passed and the owner explicitly approves a
+controlled launch. The application defaults this switch to false; setting it
+to true is an explicit release action and does not replace the verification
+and approval steps.
+
 ## 3. Backup
 
 Automated managed-PostgreSQL backups must be enabled at the database provider.

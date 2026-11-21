@@ -33,13 +33,7 @@ export function parseEnv(input: Record<string, string | undefined>) {
     throw new Error("DATABASE_URL must use PostgreSQL.");
   }
 
-  if (parsed.APP_ENV === "production") {
-    if (parsed.ENABLE_REAL_CUSTOMER_ORDERS) {
-      throw new Error(
-        "ENABLE_REAL_CUSTOMER_ORDERS must remain false in production.",
-      );
-    }
-
+  if (parsed.APP_ENV === "production" || parsed.NODE_ENV === "production") {
     const appUrl = new URL(parsed.APP_URL);
 
     if (appUrl.protocol !== "https:") {
