@@ -31,6 +31,29 @@ npm run admin:bootstrap-owner
 
 The bootstrap refuses to run if an active Owner/Admin already exists. It creates/repairs only the two locked V1 locations and the initial owner; it does not seed fake products, sales or orders. After bootstrap, manage staff only through **Users / Audit**.
 
+### Reset a staging Owner/Admin password
+
+The bootstrap command is one-time and refuses to reset an existing owner. To
+recover a staging owner account, use the staging-only password reset command.
+Set `APP_ENV=staging`, use the direct connection URL for the `pasalho-lite-staging`
+database, and set `STAGING_DATABASE_CONFIRMATION=pasalho-lite-staging` before
+running it. The command changes only the password hash for the named active
+Owner/Admin and appends an audit record. It refuses production configuration.
+
+```powershell
+function Read-SecretValue($prompt) {
+  $secure = Read-Host $prompt -AsSecureString
+  return [System.Net.NetworkCredential]::new("", $secure).Password
+}
+
+$env:APP_ENV = "staging"
+$env:STAGING_DATABASE_CONFIRMATION = "pasalho-lite-staging"
+$env:DATABASE_URL = Read-SecretValue "Paste the direct staging database URL"
+$env:RESET_OWNER_EMAIL = Read-Host "Owner/Admin email"
+$env:RESET_OWNER_PASSWORD = Read-SecretValue "Choose a new password (14+ characters)"
+npm run admin:reset-staging-owner-password
+```
+
 ## 2. Release sequence
 
 1. Create a database backup.
