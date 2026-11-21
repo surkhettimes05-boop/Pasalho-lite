@@ -65,8 +65,8 @@ database on localhost.
 - `ENABLE_REAL_CUSTOMER_ORDERS` defaults to false. Keep it false in every
   production environment until credentialed end-to-end verification passes and
   the owner explicitly approves controlled order enablement. Production
-  security validation still runs whenever `NODE_ENV` is production, including
-  when `APP_ENV` is omitted.
+  security validation runs when `APP_ENV` is production, or when
+  `NODE_ENV` is production and `APP_ENV` is omitted.
 - Post-dispatch COD recovery is supported only when all remaining items are
   physically returned together; partial failed-delivery recovery remains
   unsupported as specified by the existing V1 workflow.

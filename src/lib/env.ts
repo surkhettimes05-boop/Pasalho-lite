@@ -33,7 +33,11 @@ export function parseEnv(input: Record<string, string | undefined>) {
     throw new Error("DATABASE_URL must use PostgreSQL.");
   }
 
-  if (parsed.APP_ENV === "production" || parsed.NODE_ENV === "production") {
+  const isProduction =
+    parsed.APP_ENV === "production" ||
+    (input.APP_ENV === undefined && parsed.NODE_ENV === "production");
+
+  if (isProduction) {
     const appUrl = new URL(parsed.APP_URL);
 
     if (appUrl.protocol !== "https:") {

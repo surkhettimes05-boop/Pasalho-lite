@@ -36,7 +36,7 @@ describe("production environment validation", () => {
     expect(parsed.ENABLE_REAL_CUSTOMER_ORDERS).toBe(true);
   });
 
-  it("applies production checks when NODE_ENV is production without APP_ENV", () => {
+  it("applies production checks when NODE_ENV is production and APP_ENV is omitted", () => {
     expect(() =>
       parseEnv({
         ...base,
