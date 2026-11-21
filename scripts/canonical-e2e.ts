@@ -1,40 +1,57 @@
-import { randomUUID } from "node:crypto";
-import { PrismaPg } from "@prisma/adapter-pg";
-import {
-  PaymentMethod,
-  PrismaClient,
-  Role,
-} from "../src/generated/prisma/client";
-import { prisma } from "../src/lib/db";
-import { getNepalOperatingDateKey } from "../src/lib/time";
-import { recordCashMovement } from "../src/modules/cash/cash.service";
-import { createCustomer } from "../src/modules/customers/customer.service";
-import {
-  closeOperatingDay,
-} from "../src/modules/daily-close/daily-close.service";
-import {
-  reconcileInventoryBalance,
-} from "../src/modules/inventory/inventory.service";
-import { reconcileLoyaltyAccount } from "../src/modules/loyalty/loyalty.service";
-import {
-  confirmCustomerOrder,
-  createCustomerOrder,
-  deliverCustomerOrder,
-  dispatchCustomerOrder,
-  packCustomerOrder,
-} from "../src/modules/orders/order.service";
-import { finalizeSale } from "../src/modules/pos/pos.service";
-import { createProduct } from "../src/modules/products/product.service";
-import { postPurchaseReceipt } from "../src/modules/receiving/receipt.service";
-import { createSupplier } from "../src/modules/receiving/supplier.service";
-import {
-  createTransfer,
-  dispatchTransfer,
-  markTransferReady,
-  receiveTransfer,
-} from "../src/modules/transfers/transfer.service";
-import { CashMovementType } from "../src/generated/prisma/client";
-import { installModernPricingMock } from "../tests/helpers/modern-pricing-mock";
+import { config } from "dotenv";
+
+config({ path: ".env.test", override: false });
+config({ path: ".env", override: false });
+
+if (process.env.TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+}
+
+// Import application modules only after selecting the disposable database.
+// Their environment and Prisma clients are initialized during module loading.
+const [
+  { randomInt, randomUUID },
+  { PrismaPg },
+  { PaymentMethod, PrismaClient, Role, CashMovementType },
+  { prisma },
+  { getNepalOperatingDateKey },
+  { recordCashMovement },
+  { createCustomer },
+  { closeOperatingDay },
+  { reconcileInventoryBalance },
+  { reconcileLoyaltyAccount },
+  {
+    confirmCustomerOrder,
+    createCustomerOrder,
+    deliverCustomerOrder,
+    dispatchCustomerOrder,
+    packCustomerOrder,
+  },
+  { finalizeSale },
+  { createProduct },
+  { postPurchaseReceipt },
+  { createSupplier },
+  { createTransfer, dispatchTransfer, markTransferReady, receiveTransfer },
+  { installModernPricingMock },
+] = await Promise.all([
+  import("node:crypto"),
+  import("@prisma/adapter-pg"),
+  import("../src/generated/prisma/client"),
+  import("../src/lib/db"),
+  import("../src/lib/time"),
+  import("../src/modules/cash/cash.service"),
+  import("../src/modules/customers/customer.service"),
+  import("../src/modules/daily-close/daily-close.service"),
+  import("../src/modules/inventory/inventory.service"),
+  import("../src/modules/loyalty/loyalty.service"),
+  import("../src/modules/orders/order.service"),
+  import("../src/modules/pos/pos.service"),
+  import("../src/modules/products/product.service"),
+  import("../src/modules/receiving/receipt.service"),
+  import("../src/modules/receiving/supplier.service"),
+  import("../src/modules/transfers/transfer.service"),
+  import("../tests/helpers/modern-pricing-mock"),
+]);
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -49,7 +66,8 @@ function eq(actual: string | number, expected: string | number, label: string) {
 
 const restorePricingMock = installModernPricingMock();
 
-const suffix = randomUUID().slice(0, 8);
+// Customer phone fixtures must remain numeric and unique across repeated runs.
+const suffix = String(randomInt(10_000_000, 100_000_000));
 const ownerRecord = await prisma.user.findUniqueOrThrow({
   where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
 });
@@ -165,7 +183,7 @@ storeBalance = await prisma.stockBalance.findUniqueOrThrow({
 eq(storeBalance.onHand.toString(), "20", "store after transfer receive");
 eq(storeBalance.averageUnitCost?.toFixed(2) ?? "MISSING", "110.00", "store moving-average cost after transfer");
 
-const posDigits = suffix.replace(/\D/g, "").padEnd(8, "5").slice(0, 8);
+const posDigits = suffix;
 const posCustomer = await createCustomer(cashier, {
   phone: `98${posDigits}`,
   name: "Canonical POS Attribution Customer",
@@ -200,7 +218,7 @@ storeBalance = await prisma.stockBalance.findUniqueOrThrow({
 });
 eq(storeBalance.onHand.toString(), "17", "store after POS sale");
 
-const digits = suffix.replace(/\D/g, "").padEnd(8, "6").slice(0, 8);
+const digits = String(randomInt(10_000_000, 100_000_000));
 const customer = await createCustomer(cashier, {
   phone: `98${digits}`,
   name: "Canonical E2E Customer",

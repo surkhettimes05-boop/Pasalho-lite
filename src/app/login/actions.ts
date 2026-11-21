@@ -57,10 +57,21 @@ export async function loginAction(formData: FormData) {
     redirect("/login?error=invalid");
   }
 
-  const user = await authenticateCredentials(
-    parsed.data.email,
-    parsed.data.password,
-  );
+  let user: Awaited<ReturnType<typeof authenticateCredentials>>;
+  try {
+    user = await authenticateCredentials(
+      parsed.data.email,
+      parsed.data.password,
+    );
+  } catch {
+    writeOperationLog({
+      requestId,
+      operation: "AUTH_LOGIN",
+      status: "failure",
+      errorCategory: "AUTH_SERVICE_UNAVAILABLE",
+    });
+    redirect("/login?error=unavailable");
+  }
 
   if (!user) {
     recordLoginFailure(rateKey);
@@ -74,7 +85,20 @@ export async function loginAction(formData: FormData) {
   }
 
   clearLoginFailures(rateKey);
-  const { token, expiresAt } = await createSession(user.id);
+  let session: Awaited<ReturnType<typeof createSession>>;
+  try {
+    session = await createSession(user.id);
+  } catch {
+    writeOperationLog({
+      requestId,
+      operation: "AUTH_LOGIN",
+      actorId: user.id,
+      status: "failure",
+      errorCategory: "SESSION_CREATE_FAILED",
+    });
+    redirect("/login?error=unavailable");
+  }
+  const { token, expiresAt } = session;
   const cookieStore = await cookies();
 
   cookieStore.set(SESSION_COOKIE_NAME, token, {

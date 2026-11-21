@@ -84,15 +84,19 @@ async function main() {
       storeId: store.rows[0].id,
       environment: env.APP_ENV,
     };
+    const action =
+      env.APP_ENV === "production"
+        ? "PRODUCTION_BOOTSTRAP_COMPLETED"
+        : "STAGING_BOOTSTRAP_COMPLETED";
     await client.query(
       `INSERT INTO "AuditLog" (id, "actorUserId", action, "entityType", "entityId", "afterData", "createdAt")
-       VALUES ($1, NULL, 'PRODUCTION_BOOTSTRAP_COMPLETED', 'User', $2, $3::jsonb, NOW())`,
-      [randomUUID(), user.rows[0].id, JSON.stringify(afterData)],
+       VALUES ($1, NULL, $2, 'User', $3, $4::jsonb, NOW())`,
+      [randomUUID(), action, user.rows[0].id, JSON.stringify(afterData)],
     );
 
     await client.query("COMMIT");
     console.log(
-      `Production bootstrap completed for ${user.rows[0].email}; warehouse=${warehouse.rows[0].code}; store=${store.rows[0].code}.`,
+      `${env.APP_ENV === "production" ? "Production" : "Staging"} bootstrap completed for ${user.rows[0].email}; warehouse=${warehouse.rows[0].code}; store=${store.rows[0].code}.`,
     );
   } catch (error) {
     await client.query("ROLLBACK");

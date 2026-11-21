@@ -12,6 +12,7 @@
 .env
 .env.*
 !.env.example
+!.env.test.example
 
 # Prisma generated client
 /src/generated/prisma

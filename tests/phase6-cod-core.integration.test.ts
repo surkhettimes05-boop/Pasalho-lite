@@ -11,6 +11,7 @@ import {
 } from "@/generated/prisma/client";
 import type { SessionUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
+import { env } from "@/lib/env";
 import { createCustomer } from "@/modules/customers/customer.service";
 import { reconcileInventoryBalance } from "@/modules/inventory/inventory.service";
 import { reconcileLoyaltyAccount } from "@/modules/loyalty/loyalty.service";
@@ -122,6 +123,32 @@ async function stock() {
 }
 
 describe("Phase 6 COD core lifecycle", () => {
+  it("blocks customer-order creation when the feature flag is disabled", async () => {
+    const previous = env.ENABLE_REAL_CUSTOMER_ORDERS;
+    env.ENABLE_REAL_CUSTOMER_ORDERS = false;
+
+    try {
+      await expect(
+        createCustomerOrder(cashier, {
+          customerId,
+          addressText: "Disabled order test address",
+          deliveryCharge: "0",
+          notes: "",
+          idempotencyKey: `p6-disabled-create-${suffix}`,
+          items: [{ productId, quantity: "1" }],
+        }),
+      ).rejects.toMatchObject({ code: "CUSTOMER_ORDERS_DISABLED" });
+    } finally {
+      env.ENABLE_REAL_CUSTOMER_ORDERS = previous;
+    }
+
+    expect(
+      await prisma.customerOrder.count({
+        where: { createIdempotencyKey: `p6-disabled-create-${suffix}` },
+      }),
+    ).toBe(0);
+  });
+
   it("NEW creates pending payment with no reservation or stock movement", async () => {
     const order = await createCustomerOrder(cashier, {
       customerId,

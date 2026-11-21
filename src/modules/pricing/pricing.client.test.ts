@@ -115,6 +115,82 @@ describe("Modern member pricing client", () => {
     ).rejects.toMatchObject({ code: "PRICING_SERVICE_UNAVAILABLE" });
   });
 
+  it("maps the Modern Trade invalid-store response to a safe request rejection", async () => {
+    const client = new MemberPricingClient(config, async () =>
+      Response.json(
+        { error: "Store not found", code: "STORE_NOT_FOUND" },
+        { status: 404 },
+      ),
+    );
+
+    await expect(
+      client.createQuote({
+        channel: "POS",
+        storeReference: "00000000-0000-4000-8000-000000000099",
+        customerReference: null,
+        customerPhoneReference: null,
+        items: [{ sku: "CLIENT-01", quantity: "1" }],
+      }),
+    ).rejects.toMatchObject({ code: "STORE_NOT_FOUND" });
+  });
+
+  it("fails closed on authentication rejection and HTTP service errors", async () => {
+    const unauthorized = new MemberPricingClient(config, async () =>
+      Response.json(
+        { error: "Service authentication is required.", code: "SERVICE_AUTH_REQUIRED" },
+        { status: 401 },
+      ),
+    );
+    const unavailable = new MemberPricingClient(config, async () =>
+      Response.json(
+        { error: "Pricing service unavailable", code: "SERVICE_UNAVAILABLE" },
+        { status: 503 },
+      ),
+    );
+    const input = {
+      channel: "COD" as const,
+      storeReference: validQuote.storeReference,
+      customerReference: null,
+      customerPhoneReference: null,
+      items: [{ sku: "CLIENT-01", quantity: "1" }],
+    };
+
+    await expect(unauthorized.createQuote(input)).rejects.toMatchObject({
+      code: "PRICING_SERVICE_AUTH_FAILED",
+    });
+    await expect(unavailable.createQuote(input)).rejects.toMatchObject({
+      code: "PRICING_SERVICE_UNAVAILABLE",
+    });
+  });
+
+  it("uses the configured request deadline and fails closed when it expires", async () => {
+    const fetcher = vi.fn<typeof fetch>(
+      async (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal as AbortSignal;
+          signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("The operation was aborted", "TimeoutError")),
+            { once: true },
+          );
+        }),
+    );
+    const client = new MemberPricingClient(
+      { ...config, requestTimeoutMs: 20 },
+      fetcher,
+    );
+
+    await expect(
+      client.createQuote({
+        channel: "POS",
+        storeReference: validQuote.storeReference,
+        customerReference: null,
+        customerPhoneReference: null,
+        items: [{ sku: "CLIENT-01", quantity: "1" }],
+      }),
+    ).rejects.toMatchObject({ code: "PRICING_SERVICE_UNAVAILABLE" });
+  });
+
   it("rejects a response with altered totals instead of trusting it", async () => {
     const fetcher = vi.fn(async () =>
       Response.json({

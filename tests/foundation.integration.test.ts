@@ -5,6 +5,7 @@ import {
   createSession,
   deleteSession,
   getSessionUser,
+  hashSessionToken,
 } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 
@@ -84,5 +85,34 @@ describe("Phase 0 foundation", () => {
     );
 
     expect(owner).toBeNull();
+  });
+
+  it("rejects expired sessions and sessions belonging to deactivated users", async () => {
+    const owner = await authenticateCredentials(
+      process.env.SEED_OWNER_EMAIL!,
+      process.env.SEED_OWNER_PASSWORD!,
+    );
+    const expired = await createSession(owner!.id);
+    createdSessionTokens.push(expired.token);
+    await prisma.session.update({
+      where: { tokenHash: hashSessionToken(expired.token) },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+    expect(await getSessionUser(expired.token)).toBeNull();
+
+    const inactive = await createSession(owner!.id);
+    createdSessionTokens.push(inactive.token);
+    await prisma.user.update({
+      where: { id: owner!.id },
+      data: { active: false },
+    });
+    try {
+      expect(await getSessionUser(inactive.token)).toBeNull();
+    } finally {
+      await prisma.user.update({
+        where: { id: owner!.id },
+        data: { active: true },
+      });
+    }
   });
 });

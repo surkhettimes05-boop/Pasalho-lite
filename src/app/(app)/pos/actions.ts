@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ZodError } from "zod";
 import { PaymentMethod, Role } from "@/generated/prisma/client";
-import { assertRole } from "@/lib/auth/authorization";
+import { assertRole, AuthorizationError } from "@/lib/auth/authorization";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { BusinessError } from "@/lib/business-error";
 import {
@@ -25,6 +25,10 @@ function value(formData: FormData, key: string) {
 
 function operationError(error: unknown) {
   if (error instanceof BusinessError) {
+    return error.code;
+  }
+
+  if (error instanceof AuthorizationError) {
     return error.code;
   }
 

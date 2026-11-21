@@ -14,6 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:prepare": "tsx scripts/prepare-test-db.ts",
+    "test:release": "npm run test:prepare && npm test",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "db:migrate:deploy": "prisma migrate deploy",
@@ -22,8 +24,9 @@
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore": "bash scripts/db-restore.sh",
     "db:verify-restore": "tsx scripts/verify-restore.ts",
-    "release:e2e": "node --conditions=react-server --import tsx scripts/canonical-e2e.ts",
-    "admin:bootstrap-owner": "tsx scripts/bootstrap-owner.ts"
+    "release:e2e": "npm run test:prepare && node --env-file-if-exists=.env.test --conditions=react-server --import tsx scripts/canonical-e2e.ts",
+    "admin:bootstrap-owner": "tsx scripts/bootstrap-owner.ts",
+    "admin:reset-staging-owner-password": "tsx scripts/reset-staging-owner-password.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
@@ -50,10 +53,11 @@
     "tsx": "4.20.6",
     "typescript": "5.9.3",
     "vitest": "5.0.3",
-    "vite": "7.1.5"
+    "vite": "7.3.8"
   },
   "overrides": {
     "deepmerge-ts": "8.0.0",
+    "effect": "3.22.1",
     "mysql2": "3.23.1"
   },
   "packageManager": "npm@10.9.2"

@@ -27,14 +27,20 @@ type CustomerSelection = {
   spendRemainder: string;
 };
 
-type CustomerResult =
-  | { ok: true; customer: CustomerSelection }
-  | { ok: false; code: string };
-
 type Line = {
   key: string;
   productKey: string;
   quantity: string;
+};
+
+const customerErrors: Record<string, string> = {
+  CUSTOMER_NOT_FOUND: "Customer not found. Create them below.",
+  CUSTOMER_EXISTS: "A customer with this phone already exists. Look them up again.",
+  INVALID_CUSTOMER_INPUT: "Check the customer phone and name.",
+  INVALID_ORDER_INPUT: "Check the customer phone and name.",
+  UNAUTHORIZED_ACTION: "Your role cannot create or look up customers.",
+  CUSTOMER_LOOKUP_FAILED: "Customer lookup is temporarily unavailable. Try again shortly.",
+  CUSTOMER_CREATE_FAILED: "Customer creation is temporarily unavailable. Try again shortly.",
 };
 
 function newLine(): Line {
@@ -99,10 +105,15 @@ export function CreateOrderForm({
         setMessage("Customer selected.");
       } else if (result.code === "CUSTOMER_NOT_FOUND") {
         setCustomer(null);
-        setMessage("Customer not found. Create them below.");
+        setMessage(customerErrors[result.code]);
       } else {
-        setMessage("Check the phone and try again.");
+        setCustomer(null);
+        setMessage(
+          customerErrors[result.code] ?? customerErrors.CUSTOMER_LOOKUP_FAILED,
+        );
       }
+    } catch {
+      setMessage(customerErrors.CUSTOMER_LOOKUP_FAILED);
     } finally {
       setBusy(false);
     }
@@ -118,8 +129,12 @@ export function CreateOrderForm({
         setName("");
         setMessage("Customer created and selected.");
       } else {
-        setMessage("Customer could not be created.");
+        setMessage(
+          customerErrors[result.code] ?? customerErrors.CUSTOMER_CREATE_FAILED,
+        );
       }
+    } catch {
+      setMessage(customerErrors.CUSTOMER_CREATE_FAILED);
     } finally {
       setBusy(false);
     }

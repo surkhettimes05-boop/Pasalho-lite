@@ -15,6 +15,10 @@ const baseEnvSchema = z.object({
   MODERN_PRICING_SERVICE_TOKEN: z.string().min(32).optional(),
   MODERN_PRICING_STORE_REFERENCE: z.string().uuid().optional(),
   SESSION_TTL_HOURS: z.coerce.number().int().positive().max(168).default(12),
+  ENABLE_REAL_CUSTOMER_ORDERS: z.preprocess(
+    (value) => (value === undefined ? "false" : value),
+    z.enum(["true", "false"]).transform((value) => value === "true"),
+  ),
   LOYALTY_EARN_ENABLED: booleanStringFlag,
   LOYALTY_REDEMPTION_ENABLED: z.preprocess(
     (value) => (value === undefined ? "false" : value),
@@ -29,7 +33,11 @@ export function parseEnv(input: Record<string, string | undefined>) {
     throw new Error("DATABASE_URL must use PostgreSQL.");
   }
 
-  if (parsed.APP_ENV === "production") {
+  const isProduction =
+    parsed.APP_ENV === "production" ||
+    (input.APP_ENV === undefined && parsed.NODE_ENV === "production");
+
+  if (isProduction) {
     const appUrl = new URL(parsed.APP_URL);
 
     if (appUrl.protocol !== "https:") {
