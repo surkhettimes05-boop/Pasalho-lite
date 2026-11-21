@@ -43,6 +43,9 @@ service error.
 - Lite clean migrations, upgrade from the prior 16-migration state, and
   restore verification are run against disposable PostgreSQL. CI repeats the
   clean migration, tests, backup/restore, and canonical mock-backed E2E steps.
+- Lite currently uses one `DATABASE_URL` for application access and Prisma
+  migrations. It has no separate migration credential or runtime-role posture
+  check; Modern Trade has both and those checks were exercised separately.
 
 These checks are not a live Lite-to-staging-service test. Do not interpret the
 test mock or local Fastify/PostgreSQL route tests as evidence of staging
@@ -58,3 +61,9 @@ reference and SKU mapping. Then run POS and COD quote/validation flows and
 fault injection against staging while keeping real customer orders disabled.
 No production credential, database, or customer record is required for that
 evidence.
+
+The Lite database owner must also decide whether a separate least-privilege
+runtime role and migration-only role are required for this deployment. If so,
+the Lite repository needs an approved credential-split and permission-check
+design; current launch evidence covers schema behavior and recovery, not
+runtime role isolation.
