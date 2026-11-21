@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Role } from "@/generated/prisma/client";
 import { CreateOrderForm } from "@/components/create-order-form";
 import { requirePageRole } from "@/lib/auth/require-role";
+import { env } from "@/lib/env";
 import { formatNepalDateTime } from "@/lib/time";
 import {
   getCustomerOrderPage,
@@ -10,8 +11,12 @@ import {
 } from "@/modules/orders/order.service";
 
 const errors: Record<string, string> = {
+  CUSTOMER_ORDERS_DISABLED: "Customer order creation is currently disabled.",
+  UNAUTHORIZED_ACTION: "Your role cannot create or manage customer orders.",
   CUSTOMER_NOT_AVAILABLE: "Select an active customer.",
   PRODUCT_NOT_AVAILABLE: "Every order item must use an active product.",
+  PRICING_SERVICE_UNAVAILABLE: "Authoritative COD pricing is unavailable. No order was created. Try again when pricing service is available.",
+  PRICING_SERVICE_NOT_CONFIGURED: "Authoritative COD pricing is not configured. Order creation is unavailable.",
   STORE_NOT_FOUND: "The Pasalho Store location is unavailable.",
   IDEMPOTENCY_CONFLICT: "This order request conflicts with an earlier request.",
   INVALID_ORDER_INPUT: "Check the order fields and try again.",
@@ -64,12 +69,16 @@ export default async function OrdersPage({
         </p>
       ) : null}
 
-      <section className="panel">
-        <CreateOrderForm
-          products={catalog}
-          idempotencyKey={randomUUID()}
-        />
-      </section>
+      {env.ENABLE_REAL_CUSTOMER_ORDERS ? (
+        <section className="panel">
+          <CreateOrderForm products={catalog} idempotencyKey={randomUUID()} />
+        </section>
+      ) : (
+        <p className="error-message" role="status">
+          Customer order creation is disabled. Existing orders can still be
+          fulfilled or recovered.
+        </p>
+      )}
 
       <section className="panel">
         <div className="panel-heading">

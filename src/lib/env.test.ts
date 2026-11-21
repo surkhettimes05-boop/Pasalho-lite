@@ -11,6 +11,29 @@ const base: NodeJS.ProcessEnv = {
 };
 
 describe("production environment validation", () => {
+  it("defaults real customer order creation to disabled", () => {
+    const parsed = parseEnv({
+      ...base,
+      APP_ENV: "production",
+      APP_URL: "https://pasalho.example.com",
+      AUTH_SECRET:
+        "9Qf7kL2mN8rT4vX6zA1cD3eG5hJ7pS9uW2yB4nM6qR8tV1xZ",
+    });
+
+    expect(parsed.ENABLE_REAL_CUSTOMER_ORDERS).toBe(false);
+  });
+
+  it("rejects enabling real customer orders in production", () => {
+    expect(() => parseEnv({
+      ...base,
+      APP_ENV: "production",
+      APP_URL: "https://pasalho.example.com",
+      AUTH_SECRET:
+        "9Qf7kL2mN8rT4vX6zA1cD3eG5hJ7pS9uW2yB4nM6qR8tV1xZ",
+      ENABLE_REAL_CUSTOMER_ORDERS: "true",
+    })).toThrow(/must remain false in production/);
+  });
+
   it("rejects non-HTTPS production APP_URL", () => {
     expect(() =>
       parseEnv({

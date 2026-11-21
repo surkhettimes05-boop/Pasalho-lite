@@ -13,6 +13,8 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     setupFiles: ["tests/setup-env.ts"],
     fileParallelism: false,
+    maxWorkers: 4,
     testTimeout: 15_000,
+    hookTimeout: 30_000,
   },
 });

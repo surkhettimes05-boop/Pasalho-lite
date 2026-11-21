@@ -18,6 +18,7 @@ export default async function LoginPage({
   const params = await searchParams;
   const invalid = params.error === "invalid";
   const rateLimited = params.error === "rate_limited";
+  const unavailable = params.error === "unavailable";
 
   return (
     <main className="login-page">
@@ -38,6 +39,11 @@ export default async function LoginPage({
         {rateLimited ? (
           <p className="error-message" role="alert">
             Too many failed sign-in attempts. Try again after the security window.
+          </p>
+        ) : null}
+        {unavailable ? (
+          <p className="error-message" role="alert">
+            Sign-in is temporarily unavailable. Please try again shortly.
           </p>
         ) : null}
 

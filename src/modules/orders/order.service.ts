@@ -15,6 +15,7 @@ import { assertRole } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
+import { env } from "@/lib/env";
 import {
   changeInventoryReserved,
   recordPhysicalInventoryMovement,
@@ -149,6 +150,12 @@ export async function createCustomerOrder(
   input: CreateCustomerOrderInput,
 ) {
   assertRole(actor.role, [Role.OWNER_ADMIN, Role.CASHIER_STORE]);
+  if (!env.ENABLE_REAL_CUSTOMER_ORDERS) {
+    throw new BusinessError(
+      "CUSTOMER_ORDERS_DISABLED",
+      "Customer order creation is currently disabled.",
+    );
+  }
   const parsed = createCustomerOrderInputSchema.parse(input);
 
   const existing = await prisma.customerOrder.findUnique({

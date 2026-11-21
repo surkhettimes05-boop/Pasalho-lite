@@ -15,12 +15,14 @@ import { getCustomerOrderById } from "@/modules/orders/order.service";
 
 const errors: Record<string, string> = {
   ORDER_NOT_FOUND: "Order not found.",
+  UNAUTHORIZED_ACTION: "Your role cannot manage customer orders.",
   INVALID_STATE_TRANSITION: "That order state transition is not allowed.",
   INSUFFICIENT_STOCK: "Store available stock is insufficient to confirm this order.",
   RESERVATION_INTEGRITY_ERROR: "The order reservation no longer reconciles correctly.",
   PAYMENT_INTEGRITY_ERROR: "The COD payment is not in the expected state.",
   IDEMPOTENCY_CONFLICT: "This command conflicts with an earlier order command.",
   ORDER_OPERATION_FAILED: "The order operation could not be completed.",
+  PRICING_SERVICE_UNAVAILABLE: "Authoritative COD pricing is unavailable. No order was created.",
 };
 
 const success: Record<string, string> = {
