@@ -34,6 +34,9 @@ jobs:
       DATABASE_URL: postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_lite?schema=public
       AUTH_SECRET: phase-zero-ci-auth-secret-that-is-longer-than-thirty-two-characters
       APP_URL: http://127.0.0.1:3000
+      MODERN_PRICING_API_URL: http://modern-pricing.test
+      MODERN_PRICING_SERVICE_TOKEN: ci-only-modern-pricing-service-token-not-for-production
+      MODERN_PRICING_STORE_REFERENCE: 00000000-0000-4000-8000-000000000001
       SESSION_TTL_HOURS: "12"
       SEED_OWNER_EMAIL: owner@ci.pasalho.test
       SEED_OWNER_PASSWORD: ci-owner-password-change-outside-ci
@@ -173,8 +176,8 @@ jobs:
       - name: Production build
         run: npm run build
 
-      - name: Cloudflare Workers OpenNext build
-        run: npm run cloudflare:build
+      # Provider-specific packaging will be added once hosting is selected.
+      # For now, verify the standard Next.js build and live HTTP readiness.
 
       - name: Boot smoke test
         shell: bash

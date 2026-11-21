@@ -14,6 +14,7 @@ import {
 import { assertRole } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
+import { realCustomerOrdersEnabled } from "@/lib/real-customer-orders";
 import { prisma } from "@/lib/db";
 import {
   changeInventoryReserved,
@@ -148,6 +149,12 @@ export async function createCustomerOrder(
   actor: SessionUser,
   input: CreateCustomerOrderInput,
 ) {
+  if (!realCustomerOrdersEnabled()) {
+    throw new BusinessError(
+      "CUSTOMER_ORDERS_DISABLED",
+      "Customer orders are disabled until production verification is complete.",
+    );
+  }
   assertRole(actor.role, [Role.OWNER_ADMIN, Role.CASHIER_STORE]);
   const parsed = createCustomerOrderInputSchema.parse(input);
 
