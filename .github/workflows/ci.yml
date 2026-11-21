@@ -171,12 +171,12 @@ jobs:
         run: |
           docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
             psql -h 127.0.0.1 -U pasalho -d postgres \
-            -c 'DROP DATABASE IF EXISTS pasalho_e2e WITH (FORCE);'
+            -c 'DROP DATABASE IF EXISTS pasalho_e2e_test WITH (FORCE);'
           docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
             psql -h 127.0.0.1 -U pasalho -d postgres \
-            -c 'CREATE DATABASE pasalho_e2e;'
+            -c 'CREATE DATABASE pasalho_e2e_test;'
 
-          export TEST_DATABASE_URL='postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_e2e?schema=public'
+          export TEST_DATABASE_URL='postgresql://pasalho:pasalho@127.0.0.1:5432/pasalho_e2e_test?schema=public'
           npm run release:e2e
 
       - name: Production build
