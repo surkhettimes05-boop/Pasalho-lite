@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173d37">
+  <title>Pasalho Offline POS</title>
+  <style>
+    :root { font: 16px system-ui, sans-serif; color: #18312d; background: #f4f6f2 }
+    * { box-sizing: border-box } body { margin: 0 } header { background: #173d37; color: white; padding: 1rem 1.5rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem }
+    main { max-width: 1250px; margin: 1rem auto; padding: 0 1rem; display: grid; gap: 1rem; grid-template-columns: 1fr 1fr }
+    section { background: white; border: 1px solid #d5dfd7; border-radius: 10px; padding: 1rem; min-width: 0 } .wide { grid-column: 1 / -1 }
+    label { display: block; margin: .6rem 0 } input, select, button { font: inherit; padding: .55rem; border: 1px solid #a6b7aa; border-radius: 5px } input[type=search], input[type=email], input[type=password] { width: 100% }
+    button { cursor: pointer; background: #173d37; color: white; border-color: #173d37; margin: .2rem } button:disabled { opacity: .5; cursor: not-allowed } .secondary { background: white; color: #173d37 }
+    .row { display: flex; justify-content: space-between; gap: 1rem; align-items: center; border-bottom: 1px solid #e4e9e5; padding: .5rem 0 } .row strong { display: block } small, .muted { color: #52675e } .error { color: #a32121 } .ok { color: #176b32 }
+    #catalog, #cart, #history, #candidates { max-height: 400px; overflow: auto } .status { font-weight: bold; padding: .3rem .7rem; border-radius: 1rem; background: #e5eae4; color: #153a35 }
+    #receipt { display: none } @media (max-width: 800px) { main { grid-template-columns: 1fr } .wide { grid-column: auto } }
+    @media print { body > header, main, #message { display: none !important } #receipt { display: block !important; color: black; padding: 1rem; font: 12px monospace } #receipt .row { border-bottom: 1px dashed black } }
+  </style>
+</head>
+<body>
+  <header><div><strong>PASALHO · Offline cash register</strong><br><small style="color:#d2e5d8">Locally completed sales remain provisional until synchronization.</small></div><div><span class="status" id="connection">CHECKING</span> <span id="pending">0 pending</span></div></header>
+  <main>
+    <section class="wide" id="unlock-panel"><h2>Unlock terminal</h2><p class="muted">Enter the terminal passphrase. It is required again after a browser restart.</p><label>Terminal passphrase <input id="passphrase" type="password" autocomplete="off" minlength="12"></label><button id="unlock">Unlock</button><p id="unlock-error" class="error"></p></section>
+    <section class="wide" id="setup-panel" hidden><h2>Owner provisioning</h2><p>Sign in as Owner/Admin online, select the SKUs approved for offline cash sales, and assign one cashier. The regular price is tax inclusive. Each authorization lasts eight hours.</p><label>Cashier <select id="cashier"></select></label><label>Terminal passphrase (12+ characters) <input id="new-passphrase" type="password" minlength="12" autocomplete="new-password"></label><div id="candidates"></div><button id="provision">Approve and initialize terminal</button><p id="setup-error" class="error"></p><h3>Registered terminals</h3><div id="terminals"></div></section>
+    <section class="wide" id="status-panel" hidden><div class="row"><div><strong id="terminal-label"></strong><small id="snapshot-age"></small></div><div><button id="retry">Retry sync</button><button id="renew" class="secondary">Review renewal prices</button><button id="revoke" class="secondary">Revoke device online</button></div></div><div class="row"><span>Last successful sync</span><strong id="last-sync">Never</strong></div><div id="sync-error" class="error"></div><div id="renew-review" hidden></div></section>
+    <section id="catalog-panel" hidden><h2>Scan / search</h2><label><input id="search" type="search" placeholder="Barcode, SKU or product name" autofocus></label><div id="catalog"></div></section>
+    <section id="cart-panel" hidden><h2>Current cash sale</h2><div id="cart"></div><div class="row"><strong>Total</strong><strong id="total">Rs 0.00</strong></div><label>Cash tendered (Rs) <input id="tendered" type="text" inputmode="decimal" placeholder="0.00"></label><button id="finalize">Save cash sale locally</button><p id="sale-error" class="error"></p></section>
+    <section class="wide" id="history-panel" hidden><h2>Local receipts and sync history</h2><div id="history"></div></section>
+  </main>
+  <div id="receipt"></div>
+  <script src="/offline-pos.js" defer></script>
+</body>
+</html>

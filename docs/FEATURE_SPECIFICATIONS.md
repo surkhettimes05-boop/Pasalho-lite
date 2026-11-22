@@ -411,7 +411,7 @@ COD is for customer orders, not normal counter POS sale.
 - No coupon engine.
 - No gift cards.
 - No store credit.
-- No offline sync engine in initial V1.
+- D-022 permits the separately scoped offline cash path in `docs/OFFLINE_POS.md`.
 - No negative quantity sale lines.
 
 ## Server authority
@@ -424,6 +424,10 @@ and records the validated quote values.
 Never trust prices, discounts, tiers, or totals sent by the browser. Cashiers
 cannot enter prices/discounts or select membership tiers. An expired or invalid
 quote cannot finalize a sale.
+
+For D-022 offline cash sales only, the server records the owner-approved
+Modern-trade regular catalog snapshot and validates every submitted line and
+total against that stored snapshot. No browser-supplied price is authoritative.
 
 ## Finalization transaction
 

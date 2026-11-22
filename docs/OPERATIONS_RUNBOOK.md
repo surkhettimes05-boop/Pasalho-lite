@@ -115,6 +115,10 @@ Never restore a test into the live production database.
 
 ## 5. Incident rule
 
+For an offline cash POS outage, use the provisioning, reconciliation, device
+recovery, and rollback instructions in `docs/OFFLINE_POS.md`. Do not close a
+day with unresolved local receipts without recording the exception.
+
 If stock, payment, loyalty or cash correctness is in doubt:
 
 1. stop the affected workflow

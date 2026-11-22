@@ -72,6 +72,8 @@ promotion and membership snapshots, quote ID, pricing-rule version, and
 currency. The quote is bound to the idempotent sale reference. If quote
 creation/validation fails or the service is unavailable, no local price
 fallback is allowed and the sale must not partially finalize.
+D-022 adds a separate, restricted cash-only offline workflow. See
+`docs/OFFLINE_POS.md`. The online quote workflow above remains unchanged.
 Cashiers cannot enter prices or discounts, select a tier, or assign Founding
 1,000. QR membership scanning is not offered because the current POS device
 architecture supports keyboard-wedge product barcodes but has no QR/camera

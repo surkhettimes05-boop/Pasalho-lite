@@ -18,6 +18,8 @@
 
 # testing
 /coverage
+/test-results
+*.tsbuildinfo
 
 # misc
 .DS_Store

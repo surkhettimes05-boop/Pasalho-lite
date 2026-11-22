@@ -88,6 +88,10 @@ server-to-server for membership verification and signed POS quotes. Never
 implement local membership eligibility, promotion calculation, or a local
 price fallback.
 
+Decision D-022 is a narrow exception for owner-approved offline cash sales
+from a stored Modern-trade regular price snapshot. It does not permit Lite
+catalog prices, local member pricing, or promotions.
+
 Server logic may be organized into modules/services, but deploy as one application.
 
 ---
