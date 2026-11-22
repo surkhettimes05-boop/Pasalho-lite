@@ -23,7 +23,8 @@
     "db:restore": "bash scripts/db-restore.sh",
     "db:verify-restore": "tsx scripts/verify-restore.ts",
     "release:e2e": "node --conditions=react-server --import tsx scripts/canonical-e2e.ts",
-    "admin:bootstrap-owner": "tsx scripts/bootstrap-owner.ts"
+    "admin:bootstrap-owner": "tsx scripts/bootstrap-owner.ts",
+    "admin:reset-production-owner": "tsx scripts/reset-production-owner-password.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

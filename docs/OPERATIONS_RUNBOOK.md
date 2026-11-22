@@ -31,6 +31,28 @@ npm run admin:bootstrap-owner
 
 The bootstrap refuses to run if an active Owner/Admin already exists. It creates/repairs only the two locked V1 locations and the initial owner; it does not seed fake products, sales or orders. After bootstrap, manage staff only through **Users / Audit**.
 
+### Reset the existing production owner login
+
+If the only active Owner/Admin is locked out, run the guarded reset script from the repository root. It changes that sole active owner's name, email, and password, clears that user's sessions, and writes an audit record. It refuses to run unless the production confirmation is exact, unless there is exactly one active Owner/Admin, or if the requested email is already used by another user. Enter the database URL and new password at the hidden PowerShell prompts; do not save either in a file or share them in chat.
+
+```powershell
+function Read-SecretValue($prompt) {
+  $secure = Read-Host $prompt -AsSecureString
+  return [System.Net.NetworkCredential]::new("", $secure).Password
+}
+
+$env:APP_ENV = "production"
+$env:PRODUCTION_DATABASE_CONFIRMATION = "pasalho-lite-production"
+$env:DATABASE_URL = Read-SecretValue "Paste the direct URL for the Pasalho Lite production branch"
+$env:RESET_OWNER_EMAIL = "pramodkc1818@gmail.com"
+$env:RESET_OWNER_NAME = "Pramod kc"
+$env:RESET_OWNER_PASSWORD = Read-SecretValue "Choose a new password with at least 16 characters"
+npm run admin:reset-production-owner
+Remove-Item Env:APP_ENV,Env:PRODUCTION_DATABASE_CONFIRMATION,Env:DATABASE_URL,Env:RESET_OWNER_EMAIL,Env:RESET_OWNER_NAME,Env:RESET_OWNER_PASSWORD -ErrorAction SilentlyContinue
+```
+
+Use the direct connection string from the Neon `production` branch, not a staging URL. Run this only for a confirmed owner lockout.
+
 ## 2. Release sequence
 
 1. Create a database backup.
