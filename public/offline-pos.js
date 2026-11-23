@@ -251,7 +251,7 @@
       const product = snapshot.products.find((candidate) => candidate.productId === item.productId);
       const line = node("div", undefined, "row"); line.append(node("span", `${product?.name || item.productId} · ${item.quantity} × ${money(item.priceCents)}`), node("strong", money(item.lineTotalCents))); paper.append(line);
     }
-    paper.append(node("p", `Discount: ${money(0)} · Prices tax inclusive`), node("h3", `Total: ${money(payload.subtotalCents)}`), node("p", `Cash tendered: ${money(payload.payment.tenderedCents)}`), node("p", `Change: ${money(payload.payment.tenderedCents - payload.subtotalCents)}`), node("strong", state === "SYNCED" ? "Server confirmed" : "OFFLINE · Locally completed · Pending server confirmation"));
+    paper.append(node("p", `Discount: ${money(0)} · Prices tax inclusive`), node("h3", `Total: ${money(payload.subtotalCents)}`), node("p", `Cash tendered: ${money(payload.payment.tenderedCents)}`), node("p", `Change: ${money(payload.payment.tenderedCents - payload.subtotalCents)}`), node("strong", state === "SYNCED" ? "Server confirmed" : state === "REFUNDED" ? "Cash refund recorded by owner · retain refund evidence" : "OFFLINE · Locally completed · Pending server confirmation"));
     window.print();
   }
   async function checkConnection() {
@@ -265,19 +265,19 @@
     entry.state = state; entry.error = message || null; entry.updatedAt = updatedAt;
     render();
   }
-  async function syncAll() {
+  async function syncAll(includeReview = false) {
     if (!snapshot || syncing || !backendOnline || halted) return;
     syncing = true; renderStatus();
     try {
       for (const entry of sales) {
-        if (entry.state !== "PENDING_SYNC" && entry.state !== "SYNCING") continue;
+        if (entry.state !== "PENDING_SYNC" && entry.state !== "SYNCING" && !(includeReview && ["CONFLICT", "REQUIRES_REVIEW"].includes(entry.state))) continue;
         try {
           await saveState(entry, "SYNCING", null);
           const payloadText = await decrypt(entry.encryptedPayload);
           const result = await api("/api/offline/sync", { method: "POST", body: JSON.stringify({ payload: payloadText, signature: entry.signature }) });
-          if (result.transactionId !== entry.id || !["SYNCED", "CONFLICT", "REQUIRES_REVIEW"].includes(result.status) || (result.status === "SYNCED" && result.saleId !== entry.id)) throw new Error("Server acknowledgment did not match this sale.");
+          if (result.transactionId !== entry.id || !["SYNCED", "CONFLICT", "REQUIRES_REVIEW", "REFUNDED"].includes(result.status) || (result.status === "SYNCED" && result.saleId !== entry.id) || (result.status === "REFUNDED" && result.saleId !== null)) throw new Error("Server acknowledgment did not match this sale.");
           await saveState(entry, result.status, result.reason);
-          if (result.status === "SYNCED") { syncAttention = false; config.lastSync = new Date().toISOString(); await write("config", config); }
+          if (result.status === "SYNCED" || result.status === "REFUNDED") { syncAttention = false; config.lastSync = new Date().toISOString(); await write("config", config); }
         } catch (cause) {
           try { await saveState(entry, "PENDING_SYNC", cause.message); }
           catch { halted = true; error("sync-error", "Local storage failed while recording synchronization status. Stop billing and preserve this device."); break; }
@@ -296,7 +296,7 @@
   }
   async function renew() {
     error("sync-error", "");
-    if (sales.some((entry) => entry.state !== "SYNCED")) { error("sync-error", "Resolve or synchronize every local sale before renewing this snapshot."); return; }
+    if (sales.some((entry) => entry.state !== "SYNCED" && entry.state !== "REFUNDED")) { error("sync-error", "Resolve or synchronize every local sale before renewing this snapshot."); return; }
     try {
       const current = await api("/api/offline/provision");
       const byId = new Map(current.products.map((item) => [item.productId, item]));
@@ -336,7 +336,7 @@
     } catch (cause) { error("unlock-error", cause.message); }
   }
   $("unlock").onclick = unlock; $("provision").onclick = provision; $("finalize").onclick = finalize;
-  $("retry").onclick = () => checkConnection().then(syncAll); $("renew").onclick = renew; $("revoke").onclick = revoke;
+  $("retry").onclick = () => checkConnection().then(() => syncAll(true)); $("renew").onclick = renew; $("revoke").onclick = revoke;
   $("search").oninput = renderCatalog;
   $("search").onkeydown = (event) => {
     if (event.key !== "Enter") return;

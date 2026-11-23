@@ -173,8 +173,10 @@ jobs:
       - name: Production build
         run: npm run build
 
-      - name: Cloudflare Workers OpenNext build
-        run: npm run cloudflare:build
+      - name: Offline cash reconciliation HTTP end-to-end
+        env:
+          MODERN_PRICING_SERVICE_TOKEN: ci-offline-pricing-token-with-sufficient-length
+        run: npm run test:e2e:offline-http
 
       - name: Boot smoke test
         shell: bash

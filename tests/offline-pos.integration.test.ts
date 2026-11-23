@@ -3,8 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { InventoryMovementType, PaymentSourceType, Role } from "@/generated/prisma/client";
 import type { SessionUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
-import { getDailyClosePreview } from "@/modules/daily-close/daily-close.service";
-import { getProvisionCandidates, ingestOfflineSale, provisionOfflineTerminal, renewOfflineSnapshot, revokeOfflineTerminal } from "@/modules/offline-pos/offline-pos.service";
+import { closeOperatingDay, getDailyClosePreview } from "@/modules/daily-close/daily-close.service";
+import { getNepalOperatingDateKey } from "@/lib/time";
+import { getProvisionCandidates, ingestOfflineSale, listOfflineReviews, provisionOfflineTerminal, renewOfflineSnapshot, resolveOfflineSubmission, revokeOfflineTerminal } from "@/modules/offline-pos/offline-pos.service";
 import { createProduct } from "@/modules/products/product.service";
 import { postPurchaseReceipt } from "@/modules/receiving/receipt.service";
 import { createSupplier } from "@/modules/receiving/supplier.service";
@@ -126,7 +127,14 @@ describe("offline cash POS reconciliation", () => {
     expect((await ingestOfflineSale(cashier, expired)).status).toBe("REQUIRES_REVIEW");
     await revokeOfflineTerminal(owner, snapshot.terminalId);
     const revoked = envelope(snapshot, keys.privateKey);
-    expect((await ingestOfflineSale(cashier, revoked)).reason).toBe("TERMINAL_REVOKED");
+    const revokedResult = await ingestOfflineSale(cashier, revoked);
+    expect(revokedResult.reason).toBe("TERMINAL_REVOKED");
+    const review = (await listOfflineReviews(owner)).find((row) => row.transactionId === revokedResult.transactionId)!;
+    const posted = await resolveOfflineSubmission(owner, { transactionId: revokedResult.transactionId, payloadHash: review.payloadHash, cashAmountCents: JSON.parse(revoked.payload).subtotalCents, action: "POST_SALE", evidence: "Owner counted stock and cash; revoked terminal receipt accepted." });
+    expect(posted.saleId).toBe(revokedResult.transactionId);
+    expect((await ingestOfflineSale(cashier, revoked)).status).toBe("SYNCED");
+    expect(await prisma.payment.count({ where: { sourceId: revokedResult.transactionId } })).toBe(1);
+    expect(await prisma.inventoryMovement.count({ where: { referenceType: "SALE", referenceId: revokedResult.transactionId } })).toBe(1);
   });
 
   it("requires review when the assigned cashier loses permission", async () => {
@@ -152,11 +160,26 @@ describe("offline cash POS reconciliation", () => {
     const payload = JSON.stringify({ version: 1, transactionId: id, snapshotId: first.snapshot.id, terminalId: first.snapshot.terminalId, storeId, cashierId: cashier.id, createdAt: new Date().toISOString(), receiptNumber: `OFF-${id.toUpperCase()}`, items: [{ productId, quantity: available, priceCents: firstProduct.priceCents, lineTotalCents: available * firstProduct.priceCents }], subtotalCents: available * firstProduct.priceCents, discountCents: 0, taxPolicy: "REGULAR_PRICE_TAX_INCLUSIVE", payment: { method: "CASH", tenderedCents: available * firstProduct.priceCents } });
     const signature = sign("sha256", Buffer.from(payload), { key: first.keys.privateKey, dsaEncoding: "ieee-p1363" }).toString("base64");
     expect((await ingestOfflineSale(cashier, { payload, signature })).status).toBe("SYNCED");
-    const later = await ingestOfflineSale(cashier, envelope(second.snapshot, second.keys.privateKey));
+    const laterRequest = envelope(second.snapshot, second.keys.privateKey);
+    const cashAmountCents = JSON.parse(laterRequest.payload).subtotalCents as number;
+    const later = await ingestOfflineSale(cashier, laterRequest);
     expect(later.status).toBe("CONFLICT");
     expect(later.reason).toBe("INSUFFICIENT_STOCK");
     expect(await prisma.sale.findUnique({ where: { id: later.transactionId } })).toBeNull();
     expect(await prisma.offlineSubmission.findUnique({ where: { transactionId: later.transactionId } })).not.toBeNull();
+    const review = (await listOfflineReviews(owner)).find((row) => row.transactionId === later.transactionId)!;
+    await expect(closeOperatingDay(owner, { operatingDate: getNepalOperatingDateKey(), actualCash: "0", notes: "Offline review is pending", idempotencyKey: `offline-close-${suffix}` })).rejects.toMatchObject({ code: "OFFLINE_CASH_UNRESOLVED" });
+    await expect(resolveOfflineSubmission(cashier, { transactionId: later.transactionId, payloadHash: review.payloadHash, cashAmountCents, action: "CASH_REFUNDED", evidence: "Cash returned against signed receipt; witness REF-001." })).rejects.toMatchObject({ code: "UNAUTHORIZED_ACTION" });
+    await expect(resolveOfflineSubmission(owner, { transactionId: later.transactionId, payloadHash: review.payloadHash, cashAmountCents: cashAmountCents - 100, action: "CASH_REFUNDED", evidence: "Cash returned against signed receipt; witness REF-001." })).rejects.toMatchObject({ code: "OFFLINE_CASH_AMOUNT_MISMATCH" });
+    const resolution = { transactionId: later.transactionId, payloadHash: review.payloadHash, cashAmountCents, action: "CASH_REFUNDED" as const, evidence: "Cash returned against signed receipt; witness REF-001." };
+    expect((await resolveOfflineSubmission(owner, resolution)).action).toBe("CASH_REFUNDED");
+    expect((await resolveOfflineSubmission(owner, resolution)).action).toBe("CASH_REFUNDED");
+    expect((await ingestOfflineSale(cashier, laterRequest)).status).toBe("REFUNDED");
+    expect(await prisma.sale.findUnique({ where: { id: later.transactionId } })).toBeNull();
+    const cash = await prisma.cashMovement.findMany({ where: { referenceType: "OFFLINE_SUBMISSION", referenceId: later.transactionId } });
+    expect(cash).toHaveLength(2);
+    expect(cash[0].amount.toFixed(2)).toBe((cashAmountCents / 100).toFixed(2));
+    await expect(prisma.offlineResolution.update({ where: { transactionId: later.transactionId }, data: { evidence: "changed" } })).rejects.toThrow();
   });
 
   it("requires owner reapproval when renewal prices change", async () => {
