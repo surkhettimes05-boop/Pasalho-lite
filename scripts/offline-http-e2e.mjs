@@ -72,7 +72,7 @@ try {
     res.end(JSON.stringify({ storeReference, currency: "NPR", products: [{ productReference: randomUUID(), sku, active: true, regularUnitPrice: "100.00", currency: "NPR", memberPricingEligible: true, ineligibilityReasons: [] }] }));
   });
   await new Promise((resolve) => pricing.listen(pricingPort, "127.0.0.1", resolve));
-  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(appPort)], { env: { ...process.env, MODERN_PRICING_API_URL: `http://127.0.0.1:${pricingPort}`, APP_URL: base }, stdio: ["ignore", "pipe", "pipe"] });
+  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(appPort)], { env: { ...process.env, MODERN_PRICING_API_URL: `http://127.0.0.1:${pricingPort}`, MODERN_PRICING_STORE_REFERENCE: "00000000-0000-4000-8000-000000000001", APP_URL: base }, stdio: ["ignore", "pipe", "pipe"] });
   let appLog = "";
   app.stdout.on("data", (chunk) => { appLog = (appLog + chunk.toString()).slice(-4000); });
   app.stderr.on("data", (chunk) => { appLog = (appLog + chunk.toString()).slice(-4000); });
