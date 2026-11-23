@@ -292,8 +292,8 @@ export async function closeOperatingDay(
           WHERE t."storeLocationId" = ${store.id}
             AND s."status" IN ('CONFLICT', 'REQUIRES_REVIEW')
             AND r."id" IS NULL
-            AND (s."payload"->>'createdAt')::timestamptz >= ${dayBounds.start}
-            AND (s."payload"->>'createdAt')::timestamptz < ${dayBounds.end}
+            AND (s."payload"->>'createdAt')::timestamptz >= ${dayBounds.start.toISOString()}::timestamptz
+            AND (s."payload"->>'createdAt')::timestamptz < ${dayBounds.end.toISOString()}::timestamptz
         `;
         if (unresolvedOfflineReceipts[0].count > 0n) {
           throw new BusinessError(
