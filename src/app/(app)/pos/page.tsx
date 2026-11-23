@@ -63,6 +63,9 @@ export default async function PosPage({
           </p>
         </div>
         <span className="status-badge">{products.length} sellable SKUs</span>
+        <Link className="secondary-light-button" href="/offline-pos.html">
+          Offline cash terminal
+        </Link>
       </header>
 
       {params.error ? (

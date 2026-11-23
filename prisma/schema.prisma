@@ -173,6 +173,8 @@ model User {
   dailyClosesReopened  DailyClose[] @relation("DailyCloseReopenedBy")
   auditLogs           AuditLog[]
   productImportBatches ProductImportBatch[]
+  offlineTerminalsApproved OfflineTerminal[] @relation("OfflineTerminalApprovedBy")
+  offlineTerminalsAssigned OfflineTerminal[] @relation("OfflineTerminalCashier")
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -206,6 +208,7 @@ model Location {
   reservations       InventoryReservation[]
   cashMovements      CashMovement[]
   dailyCloses        DailyClose[]
+  offlineTerminals   OfflineTerminal[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -440,12 +443,59 @@ model Sale {
   customer          Customer?     @relation(fields: [customerId], references: [id], onDelete: Restrict)
   finalizedBy       User          @relation("SaleFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: Restrict)
   items             SaleItem[]
+  offlineSubmission OfflineSubmission?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
   @@index([storeLocationId, finalizedAt])
   @@index([finalizedByUserId, finalizedAt])
   @@index([customerId, finalizedAt])
+}
+
+model OfflineTerminal {
+  id              String   @id @default(uuid())
+  storeLocationId String
+  cashierUserId   String
+  approvedByUserId String
+  publicKey       Json     @db.JsonB
+  revokedAt       DateTime?
+  createdAt       DateTime @default(now())
+  storeLocation   Location @relation(fields: [storeLocationId], references: [id], onDelete: Restrict)
+  cashier         User     @relation("OfflineTerminalCashier", fields: [cashierUserId], references: [id], onDelete: Restrict)
+  approvedBy      User     @relation("OfflineTerminalApprovedBy", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  snapshots       OfflineSnapshot[]
+  submissions     OfflineSubmission[]
+
+  @@index([cashierUserId, revokedAt])
+}
+
+model OfflineSnapshot {
+  id          String   @id @default(uuid())
+  terminalId  String
+  payload     Json     @db.JsonB
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  terminal    OfflineTerminal @relation(fields: [terminalId], references: [id], onDelete: Restrict)
+  submissions OfflineSubmission[]
+
+  @@index([terminalId, createdAt])
+}
+
+model OfflineSubmission {
+  transactionId String @id @db.Uuid
+  terminalId    String
+  snapshotId    String
+  payload       Json   @db.JsonB
+  payloadHash   String
+  status        String
+  reason        String?
+  saleId        String? @unique
+  createdAt     DateTime @default(now())
+  terminal      OfflineTerminal @relation(fields: [terminalId], references: [id], onDelete: Restrict)
+  snapshot      OfflineSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  sale          Sale? @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
 }
 
 model SaleItem {

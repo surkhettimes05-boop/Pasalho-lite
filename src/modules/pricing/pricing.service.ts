@@ -98,6 +98,18 @@ function storeReference() {
   return reference;
 }
 
+// The catalog is the Modern Trade authority for regular POS prices. Offline
+// snapshots never use Lite's operational sellingPrice field.
+export async function getOfflineRegularPriceCatalog(actor: SessionUser) {
+  assertRole(actor.role, [Role.OWNER_ADMIN]);
+  const reference = storeReference();
+  const catalog = await callPricingService(() => getClient().getCatalog(reference));
+  if (catalog.storeReference !== reference) {
+    throw new BusinessError("PRICING_RESPONSE_MISMATCH", "Catalog store mismatch.");
+  }
+  return catalog;
+}
+
 function modernPhoneReference(phoneNormalized: string) {
   const digits = phoneNormalized.replace(/\D/g, "");
   return digits.startsWith("977") ? digits.slice(3) : digits;

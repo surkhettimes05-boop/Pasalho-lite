@@ -51,6 +51,10 @@ The service credential is server-only; production calls require HTTPS. If the
 pricing service is unavailable, unauthenticated, or rejects the quote, the sale
 does not finalize.
 
+D-022 permits an owner-approved, time-limited offline regular-price snapshot
+for anonymous cash sales only. The server validates the stored snapshot when
+the transaction later synchronizes. See `docs/OFFLINE_POS.md`.
+
 This dependency does not add a Lite microservice or database. It is an
 explicit API boundary to the already-existing authority, not data
 synchronization.
