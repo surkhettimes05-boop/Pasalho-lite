@@ -65,6 +65,25 @@ export function installModernPricingMock() {
       });
     }
 
+    if (url.pathname.endsWith("/catalog")) {
+      const products = await prisma.product.findMany({
+        select: { sku: true, active: true, sellingPrice: true },
+      });
+      return response({
+        storeReference: url.searchParams.get("storeReference"),
+        currency: "NPR",
+        products: products.map((product) => ({
+          productReference: randomUUID(),
+          sku: product.sku,
+          active: product.active,
+          regularUnitPrice: product.sellingPrice.toFixed(2),
+          currency: "NPR",
+          memberPricingEligible: true,
+          ineligibilityReasons: [],
+        })),
+      });
+    }
+
     if (url.pathname.endsWith("/quotes/validate")) {
       const request = JSON.parse(String(init?.body)) as QuoteRequest;
       const token = request.signedQuoteToken ?? "";

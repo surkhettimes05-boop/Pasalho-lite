@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pasalho offline cash reviews</title>
+  <style>
+    :root { font: 16px system-ui,sans-serif; color: #18312d; background: #f4f6f2 }
+    * { box-sizing: border-box } body { margin: 0 } header { background: #173d37; color: white; padding: 1rem 1.5rem }
+    main { max-width: 960px; margin: 1rem auto; padding: 0 1rem } article { background: white; padding: 1.2rem; margin: 1rem 0; border: 1px solid #d5dfd7; border-radius: 8px }
+    label { display: block; margin: .6rem 0 } textarea { width: 100%; min-height: 5rem } button,select,textarea { font: inherit; padding: .5rem } button { background: #173d37; color: white; border: 0; border-radius: 4px; cursor: pointer }
+    .error { color: #a32121 } .muted { color: #52675e } code { overflow-wrap: anywhere }
+  </style>
+</head>
+<body>
+  <header><strong>PASALHO · Offline cash review</strong></header>
+  <main>
+    <p>Owner/Admin only. Count cash and physical stock, inspect the signed receipt, and record a specific resolution. Posting requires enough available stock, including any approved inventory adjustment. Refund only after cash was physically returned. The original receipt amount cannot change.</p>
+    <p><a href="/pos">Back to POS</a> · <button id="refresh" type="button">Refresh reviews</button></p>
+    <p id="message" role="alert"></p>
+    <div id="reviews"></div>
+  </main>
+  <script src="/offline-reviews.js" defer></script>
+</body>
+</html>

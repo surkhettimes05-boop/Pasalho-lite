@@ -1,3 +1,4 @@
+import "../tests/setup-env";
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
@@ -165,9 +166,9 @@ storeBalance = await prisma.stockBalance.findUniqueOrThrow({
 eq(storeBalance.onHand.toString(), "20", "store after transfer receive");
 eq(storeBalance.averageUnitCost?.toFixed(2) ?? "MISSING", "110.00", "store moving-average cost after transfer");
 
-const posDigits = suffix.replace(/\D/g, "").padEnd(8, "5").slice(0, 8);
+const posDigits = suffix.replace(/\D/g, "").padEnd(7, "5").slice(0, 7);
 const posCustomer = await createCustomer(cashier, {
-  phone: `98${posDigits}`,
+  phone: `980${posDigits}`,
   name: "Canonical POS Attribution Customer",
   notes: "",
 });
@@ -200,9 +201,9 @@ storeBalance = await prisma.stockBalance.findUniqueOrThrow({
 });
 eq(storeBalance.onHand.toString(), "17", "store after POS sale");
 
-const digits = suffix.replace(/\D/g, "").padEnd(8, "6").slice(0, 8);
+const digits = suffix.replace(/\D/g, "").padEnd(7, "6").slice(0, 7);
 const customer = await createCustomer(cashier, {
-  phone: `98${digits}`,
+  phone: `981${digits}`,
   name: "Canonical E2E Customer",
   notes: "",
 });

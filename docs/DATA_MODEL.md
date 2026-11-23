@@ -339,6 +339,12 @@ Historical snapshots protect receipts from later product edits.
 New POS sales persist the authoritative modern-trade quote snapshot. Existing
 sales remain unchanged and retain their original nullable pricing fields.
 
+D-022 offline cash sales store their `OfflineSnapshot` reference and terminal
+identity in `pricingQuoteSnapshot`; their `pricingQuoteId` remains null. New
+`OfflineTerminal`, `OfflineSnapshot`, and `OfflineSubmission` tables preserve
+device approval, immutable price snapshots, and ingestion outcomes. Details:
+`docs/OFFLINE_POS.md`.
+
 ### Payment
 
 Fields:

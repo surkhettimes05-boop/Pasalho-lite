@@ -37,7 +37,8 @@ database. The approved modern-trade integration is a narrow, authenticated,
 server-to-server dependency for membership identity verification and pricing
 quotes. Modern-trade is authoritative for membership, promotions, and prices;
 Lite must not implement a local promotion or member-pricing engine. A pricing
-service outage blocks sale finalization rather than falling back to Lite prices.
+service outage blocks ordinary online sale finalization. D-022 defines a
+separately approved offline cash exception; Lite catalog prices remain unusable.
 
 Status: LOCKED
 
@@ -225,3 +226,20 @@ channel. COD promotions must be explicitly eligible and do not inherit Web or
 POS eligibility.
 
 Status: LOCKED
+
+## D-022 Scoped offline cash POS exception
+
+Owner-approved terminals may complete anonymous, cash-only, whole-unit sales
+for a selected SKU whitelist using the latest authorized Modern-trade regular
+price catalog snapshot. The approved regular prices are tax inclusive; no
+separate tax is calculated. No member pricing, promotion, customer identity,
+loyalty earning, QR payment, return, or COD action is available offline.
+Snapshot validity is eight hours and each sale is limited to NPR 50,000.
+Local receipts are provisional until server reconciliation. Stock conflicts,
+revoked devices, changed cashier permissions, expired authorization, and closed
+operating days require visible review. Details: `docs/OFFLINE_POS.md`.
+Owner review may post the exact original sale after stock reconciliation or
+record a witnessed full cash refund without a sale. Both outcomes are
+immutable, idempotent, and retain the original signed receipt and audit trail.
+
+Status: APPROVED for scoped implementation on 2026-11-22

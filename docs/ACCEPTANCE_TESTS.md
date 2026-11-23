@@ -158,6 +158,10 @@ Make the modern-trade pricing service unavailable during quote or validation.
 Expected: finalization fails explicitly; no local-price fallback, sale,
 payment, inventory movement, or loyalty effect is created.
 
+This test applies to ordinary online POS. D-022 offline cash checkout uses a
+previously owner-approved Modern-trade regular catalog snapshot and has its
+own acceptance criteria in `docs/OFFLINE_POS.md`.
+
 ### AT-POS-008 SKU reconciliation
 
 Compare Lite and modern-trade catalogs by exact SKU.
@@ -165,6 +169,57 @@ Compare Lite and modern-trade catalogs by exact SKU.
 Expected: the Owner/Admin report lists missing SKUs, duplicate mappings,
 regular-price mismatches, inactive products, and products ineligible for
 member pricing. Names are never used as matching keys.
+
+### AT-OFF-001 Authorized offline cash sale
+
+Provision a terminal online with an active cashier and an owner-selected SKU
+whitelist from Modern-trade regular catalog prices. Disconnect internet and
+backend. Scan a whitelisted SKU, tender cash, and complete a whole-unit sale.
+Expected: encrypted signed sale is committed to persistent local storage,
+local stock decreases, and a provisional receipt can be printed. QR,
+customer/member, promotion, COD, refund and return operations are unavailable.
+
+### AT-OFF-002 Browser restart and repeated sales
+
+Complete several local sales, refresh and restart the browser while offline,
+unlock with the terminal passphrase, and inspect history. Expected: every sale
+and receipt remains, pending state resumes, and reprinting does not create a
+new transaction.
+
+### AT-OFF-003 Reconciliation and replay
+
+Reconnect, then retry each signed sale, including after an interrupted request
+and a database outage. Expected: one server Sale, Payment, POS_SALE movement per
+line, no anonymous loyalty effect, matching daily cash close, and exactly one
+business effect per transaction ID. No local `SYNCED` status before a matching
+committed server acknowledgment.
+
+### AT-OFF-004 Conflicts and policy changes
+
+Have two offline terminals sell the same last unit; also test an online order
+consuming stock, a price change, snapshot expiry, cashier permission change,
+device revocation, and a closed operating day. Expected: original approved
+regular price is retained, no negative server stock, and unresolved cash/stock
+effects are visible as `CONFLICT` or `REQUIRES_REVIEW` with audit evidence.
+
+### AT-OFF-005 Storage and hardware failure
+
+Deny persistent storage, exhaust quota, lose the device, and test the actual
+store scanner and printer. Expected: no local completion when storage cannot
+commit; device-loss recovery follows the runbook; unsupported printing is
+reported rather than claimed compatible.
+
+### AT-OFF-006 Owner conflict and cash settlement
+
+For a signed conflict or review receipt, verify the owner sees the original
+payload hash, receipt total, reason and items. Reject cashier resolution,
+altered amount, changed decision and duplicate effects. With counted and
+adjusted stock, post the original sale once with one cash payment and the
+required immutable inventory movements. For a physically refunded receipt,
+record equal cash-in and refund-out movements with witness evidence and no
+sale. Prevent close of the original operating day while a known receipt is
+unresolved. Retry the terminal acknowledgment and confirm `SYNCED` or
+`REFUNDED` without changing the original receipt.
 
 ### AT-POS-003 Insufficient stock
 

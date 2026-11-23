@@ -115,6 +115,16 @@ Never restore a test into the live production database.
 
 ## 5. Incident rule
 
+For an offline cash POS outage, use the provisioning, reconciliation, device
+recovery, and rollback instructions in `docs/OFFLINE_POS.md`. Do not close a
+day with unresolved local receipts without recording the exception.
+Owner/Admin should inspect `/offline-reviews.html` and every terminal before
+daily close. A known unresolved receipt blocks close for its original day.
+The owner records either an original sale after stock reconciliation or a
+physically completed full cash refund with evidence. If a previous close has
+already recorded a variance, investigate and document it; settlement does not
+rewrite the closed record.
+
 If stock, payment, loyalty or cash correctness is in doubt:
 
 1. stop the affected workflow

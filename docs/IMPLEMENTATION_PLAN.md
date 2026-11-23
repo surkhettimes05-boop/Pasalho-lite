@@ -94,6 +94,9 @@ validation, expiry, cart/customer/channel binding, replay prevention, SKU
 reconciliation, and historical price/promotion/membership snapshots are part
 of this gate. A pricing-service failure blocks finalization.
 
+D-022 adds the separately approved offline cash workflow specified in
+`docs/OFFLINE_POS.md`. The ordinary online POS gate remains unchanged.
+
 Build:
 
 - Sale
