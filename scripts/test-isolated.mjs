@@ -23,8 +23,12 @@ try {
   target.pathname = `/${name}`;
   const environment = { ...process.env, DATABASE_URL: target.toString() };
   run(["node_modules/prisma/build/index.js", "migrate", "deploy"], environment);
-  run(["node_modules/prisma/build/index.js", "db", "seed"], environment);
-  run(["node_modules/vitest/vitest.mjs", "run"], environment);
+  run(["--import", "tsx", "prisma/seed.ts"], environment);
+  if (process.argv.includes("--canonical")) {
+    run(["--conditions=react-server", "--import", "tsx", "scripts/canonical-e2e.ts"], environment);
+  } else {
+    run(["node_modules/vitest/vitest.mjs", "run"], environment);
+  }
 } finally {
   await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
   await admin.end();
