@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   CustomerOrderStatus,
   InventoryMovementType,
@@ -580,14 +579,12 @@ export async function processReturn(
             !isRecovery &&
             refundTotal.greaterThan(0)
           ) {
-            const customer = await tx.customer.findUnique({
-              where: { id: source.customerId },
-              select: { phoneNormalized: true },
+            const originalEvent = await tx.creatorAttributionOutbox.findUnique({
+              where: { saleId: source.id },
+              select: { payload: true },
             });
-            if (customer?.phoneNormalized) {
-              const customerPhoneHash = createHash("sha256")
-                .update(customer.phoneNormalized.replace(/^\\+977/, ""))
-                .digest("hex");
+            const originalHash = (originalEvent?.payload as { customerPhoneHash?: unknown } | undefined)?.customerPhoneHash;
+            if (typeof originalHash === "string" && /^[a-f0-9]{64}$/.test(originalHash)) {
               await tx.creatorAttributionOutbox.create({
                 data: {
                   returnId: record.id,
@@ -599,7 +596,7 @@ export async function processReturn(
                     sourceTransactionId: record.id,
                     originalSourceTransactionId: source.id,
                     sourceTransactionNumber: record.returnNumber,
-                    customerPhoneHash,
+                    customerPhoneHash: originalHash,
                     refundAmountNpr: refundTotal.toFixed(2),
                     reversedCogsNpr: reversedCogs?.toFixed(2) ?? null,
                     costStatus: reversedCogs !== null ? "VERIFIED" : "UNKNOWN",
