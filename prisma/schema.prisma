@@ -175,6 +175,7 @@ model User {
   productImportBatches ProductImportBatch[]
   offlineTerminalsApproved OfflineTerminal[] @relation("OfflineTerminalApprovedBy")
   offlineTerminalsAssigned OfflineTerminal[] @relation("OfflineTerminalCashier")
+  offlineResolutions OfflineResolution[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -444,6 +445,7 @@ model Sale {
   finalizedBy       User          @relation("SaleFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: Restrict)
   items             SaleItem[]
   offlineSubmission OfflineSubmission?
+  offlineResolution OfflineResolution?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -494,8 +496,25 @@ model OfflineSubmission {
   terminal      OfflineTerminal @relation(fields: [terminalId], references: [id], onDelete: Restrict)
   snapshot      OfflineSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
   sale          Sale? @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  resolution    OfflineResolution?
 
   @@index([status, createdAt])
+}
+
+model OfflineResolution {
+  id            String @id @default(uuid())
+  transactionId String @unique @db.Uuid
+  action        String
+  cashAmount    Decimal @db.Decimal(14, 2)
+  evidence      String
+  saleId        String? @unique
+  resolvedByUserId String
+  resolvedAt    DateTime @default(now())
+  submission    OfflineSubmission @relation(fields: [transactionId], references: [transactionId], onDelete: Restrict)
+  sale          Sale? @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  resolvedBy    User @relation(fields: [resolvedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([action, resolvedAt])
 }
 
 model SaleItem {

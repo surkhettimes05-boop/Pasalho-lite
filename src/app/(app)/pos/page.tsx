@@ -44,7 +44,7 @@ export default async function PosPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requirePageRole([Role.OWNER_ADMIN, Role.CASHIER_STORE]);
+  const actor = await requirePageRole([Role.OWNER_ADMIN, Role.CASHIER_STORE]);
   const params = await searchParams;
   const [products, recent] = await Promise.all([
     getPosCatalog(),
@@ -66,6 +66,7 @@ export default async function PosPage({
         <Link className="secondary-light-button" href="/offline-pos.html">
           Offline cash terminal
         </Link>
+        {actor.role === Role.OWNER_ADMIN ? <Link className="secondary-light-button" href="/offline-reviews.html">Offline cash reviews</Link> : null}
       </header>
 
       {params.error ? (

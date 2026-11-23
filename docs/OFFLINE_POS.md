@@ -68,7 +68,29 @@ for owner investigation. A conflict is not retried automatically and a
 completed receipt or cash amount is never silently rewritten. The owner must
 count physical stock and cash, investigate duplicate or missing receipts,
 then use the supported adjustment/return/cash workflows as appropriate.
-There is no automatic conflict settlement in this change.
+The owner review page at `/offline-reviews.html` shows the original receipt,
+payload hash, and reason. The owner must choose one of two recorded outcomes:
+
+- **POST_SALE:** Confirm the original cash was retained. Reconcile the stock
+  count and post any required inventory adjustment using the ordinary immutable
+  movement workflow. Reopen a closed original operating day. The resolution
+  transaction posts the original sale ID, exact original cash payment, and
+  stock movements once. It never edits the approved price or receipt amount.
+- **CASH_REFUNDED:** Return the full original receipt amount physically, record
+  proof and witness details, then resolve. The server records offsetting cash
+  received and refund-out movements on the current open operating day. No sale
+  or stock effect is created. A prior day's closed cash variance still needs
+  the ordinary close investigation; the refund record does not rewrite history.
+
+The owner must confirm the displayed payload hash and exact receipt amount,
+and enter at least 20 characters of evidence. Each resolution is immutable and
+unique by transaction ID; duplicate requests return the original result and a
+different decision is rejected. Known unresolved submissions block daily close
+for their original operating day. A terminal can refresh a resolved local
+conflict by pressing **Retry sync**; it then shows `SYNCED` or `REFUNDED`. This
+does not detect receipts still stranded on a device, so operators must inspect
+every terminal before close. A lost terminal still requires manual cash and
+paper-receipt investigation.
 
 ## Daily operation and recovery
 

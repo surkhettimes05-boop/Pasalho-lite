@@ -283,6 +283,25 @@ export async function closeOperatingDay(
           );
         }
 
+        const dayBounds = nepalOperatingDayBounds(parsed.operatingDate);
+        const unresolvedOfflineReceipts = await tx.$queryRaw<Array<{ count: bigint }>>`
+          SELECT COUNT(*)::bigint AS count
+          FROM "OfflineSubmission" s
+          JOIN "OfflineTerminal" t ON t."id" = s."terminalId"
+          LEFT JOIN "OfflineResolution" r ON r."transactionId" = s."transactionId"
+          WHERE t."storeLocationId" = ${store.id}
+            AND s."status" IN ('CONFLICT', 'REQUIRES_REVIEW')
+            AND r."id" IS NULL
+            AND (s."payload"->>'createdAt')::timestamptz >= ${dayBounds.start.toISOString()}::timestamptz
+            AND (s."payload"->>'createdAt')::timestamptz < ${dayBounds.end.toISOString()}::timestamptz
+        `;
+        if (unresolvedOfflineReceipts[0].count > 0n) {
+          throw new BusinessError(
+            "OFFLINE_CASH_UNRESOLVED",
+            "Resolve every known offline cash receipt before daily close.",
+          );
+        }
+
         const snapshot = await calculateSnapshot(
           tx,
           parsed.operatingDate,

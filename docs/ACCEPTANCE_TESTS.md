@@ -209,6 +209,18 @@ store scanner and printer. Expected: no local completion when storage cannot
 commit; device-loss recovery follows the runbook; unsupported printing is
 reported rather than claimed compatible.
 
+### AT-OFF-006 Owner conflict and cash settlement
+
+For a signed conflict or review receipt, verify the owner sees the original
+payload hash, receipt total, reason and items. Reject cashier resolution,
+altered amount, changed decision and duplicate effects. With counted and
+adjusted stock, post the original sale once with one cash payment and the
+required immutable inventory movements. For a physically refunded receipt,
+record equal cash-in and refund-out movements with witness evidence and no
+sale. Prevent close of the original operating day while a known receipt is
+unresolved. Retry the terminal acknowledgment and confirm `SYNCED` or
+`REFUNDED` without changing the original receipt.
+
 ### AT-POS-003 Insufficient stock
 
 Store available stock = 2.

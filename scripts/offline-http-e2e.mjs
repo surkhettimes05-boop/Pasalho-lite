@@ -72,7 +72,7 @@ try {
     res.end(JSON.stringify({ storeReference, currency: "NPR", products: [{ productReference: randomUUID(), sku, active: true, regularUnitPrice: "100.00", currency: "NPR", memberPricingEligible: true, ineligibilityReasons: [] }] }));
   });
   await new Promise((resolve) => pricing.listen(pricingPort, "127.0.0.1", resolve));
-  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(appPort)], { env: { ...process.env, MODERN_PRICING_API_URL: `http://127.0.0.1:${pricingPort}`, APP_URL: base }, stdio: ["ignore", "pipe", "pipe"] });
+  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(appPort)], { env: { ...process.env, MODERN_PRICING_API_URL: `http://127.0.0.1:${pricingPort}`, MODERN_PRICING_STORE_REFERENCE: "00000000-0000-4000-8000-000000000001", APP_URL: base }, stdio: ["ignore", "pipe", "pipe"] });
   let appLog = "";
   app.stdout.on("data", (chunk) => { appLog = (appLog + chunk.toString()).slice(-4000); });
   app.stderr.on("data", (chunk) => { appLog = (appLog + chunk.toString()).slice(-4000); });
@@ -93,7 +93,32 @@ try {
   if (first.status !== "SYNCED" || first.saleId !== transactionId || replay.saleId !== transactionId) throw new Error("Sync acknowledgment mismatch.");
   const counts = await client.query('SELECT (SELECT count(*) FROM "Sale" WHERE "id"=$1) AS sale, (SELECT count(*) FROM "Payment" WHERE "sourceId"=$1) AS payment, (SELECT count(*) FROM "InventoryMovement" WHERE "referenceType"=$2 AND "referenceId"=$1) AS movement', [transactionId, "SALE"]);
   if (Number(counts.rows[0].sale) !== 1 || Number(counts.rows[0].payment) !== 1 || Number(counts.rows[0].movement) !== 1) throw new Error("Duplicate or missing business effect.");
-  console.log("HTTP E2E PASS: authenticated provision + sync + replay with pricing service offline; one sale, payment, movement.");
+  await request("/api/offline/provision", token, { method: "DELETE", body: JSON.stringify({ terminalId }) });
+  async function submitRevokedReceipt() {
+    const id = randomUUID();
+    const receipt = JSON.stringify({ ...JSON.parse(payload), transactionId: id, receiptNumber: `OFF-${id.toUpperCase()}`, createdAt: new Date().toISOString() });
+    const signed = sign("sha256", Buffer.from(receipt), { key: pair.privateKey, dsaEncoding: "ieee-p1363" }).toString("base64");
+    const result = await request("/api/offline/sync", token, { method: "POST", body: JSON.stringify({ payload: receipt, signature: signed }) });
+    if (result.status !== "REQUIRES_REVIEW") throw new Error("Revoked device receipt should require owner review.");
+    const reviews = await request("/api/offline/reviews", token);
+    const review = reviews.reviews.find((item) => item.transactionId === id);
+    if (!review || review.sale.subtotalCents !== 10000) throw new Error("Owner review is missing original receipt evidence.");
+    return { id, receipt, signed, review };
+  }
+  const postCase = await submitRevokedReceipt();
+  const postInput = { transactionId: postCase.id, payloadHash: postCase.review.payloadHash, cashAmountCents: 10000, action: "POST_SALE", evidence: "Owner counted cash and stock; signed receipt accepted." };
+  const posted = await request("/api/offline/reviews", token, { method: "POST", body: JSON.stringify(postInput) });
+  const postedReplay = await request("/api/offline/reviews", token, { method: "POST", body: JSON.stringify(postInput) });
+  const syncedReplay = await request("/api/offline/sync", token, { method: "POST", body: JSON.stringify({ payload: postCase.receipt, signature: postCase.signed }) });
+  if (posted.saleId !== postCase.id || postedReplay.saleId !== postCase.id || syncedReplay.status !== "SYNCED") throw new Error("Owner post/replay acknowledgment mismatch.");
+  const refundCase = await submitRevokedReceipt();
+  const refundInput = { transactionId: refundCase.id, payloadHash: refundCase.review.payloadHash, cashAmountCents: 10000, action: "CASH_REFUNDED", evidence: "Cash was returned in full; witness recorded REF-HTTP-001." };
+  await request("/api/offline/reviews", token, { method: "POST", body: JSON.stringify(refundInput) });
+  const refundedReplay = await request("/api/offline/sync", token, { method: "POST", body: JSON.stringify({ payload: refundCase.receipt, signature: refundCase.signed }) });
+  const settlementCounts = await client.query('SELECT (SELECT count(*) FROM "Sale" WHERE "id"=$1) AS posted_sale, (SELECT count(*) FROM "Payment" WHERE "sourceId"=$1) AS posted_payment, (SELECT count(*) FROM "InventoryMovement" WHERE "referenceType"=$3 AND "referenceId"=$1) AS posted_movement, (SELECT count(*) FROM "Sale" WHERE "id"=$2) AS refunded_sale, (SELECT count(*) FROM "CashMovement" WHERE "referenceType"=$4 AND "referenceId"=$2) AS refund_cash', [postCase.id, refundCase.id, "SALE", "OFFLINE_SUBMISSION"]);
+  const s = settlementCounts.rows[0];
+  if (Number(s.posted_sale) !== 1 || Number(s.posted_payment) !== 1 || Number(s.posted_movement) !== 1 || Number(s.refunded_sale) !== 0 || Number(s.refund_cash) !== 2 || refundedReplay.status !== "REFUNDED") throw new Error("Owner resolution duplicated or lost financial effects.");
+  console.log("HTTP E2E PASS: authenticated sync/replay and owner post/refund resolution with pricing service offline.");
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   throw error;

@@ -238,5 +238,8 @@ Snapshot validity is eight hours and each sale is limited to NPR 50,000.
 Local receipts are provisional until server reconciliation. Stock conflicts,
 revoked devices, changed cashier permissions, expired authorization, and closed
 operating days require visible review. Details: `docs/OFFLINE_POS.md`.
+Owner review may post the exact original sale after stock reconciliation or
+record a witnessed full cash refund without a sale. Both outcomes are
+immutable, idempotent, and retain the original signed receipt and audit trail.
 
 Status: APPROVED for scoped implementation on 2026-11-22
