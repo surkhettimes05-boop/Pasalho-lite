@@ -74,6 +74,9 @@ beforeAll(async () => {
       notes: "",
     })
   ).id;
+  const identityId = randomUUID();
+  await prisma.customer.update({ where: { id: customerId }, data: { membershipIdentityId: identityId } });
+  restorePricingMock?.setMembershipProfile(identityId, { membershipNumber: 41, membershipTier: "REGISTERED_MEMBER", membershipStatus: "SUSPENDED" });
 
   await adjustInventory(owner, {
     productId,
@@ -123,6 +126,8 @@ describe("Phase 7 POS returns and refunds", () => {
       where: { saleId },
     });
     const salePayload = saleOutbox.payload as Record<string, unknown>;
+    const linkedCustomer = await prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
+    expect(salePayload.customerPhoneHash).toBe(createHash("sha256").update(linkedCustomer.phoneNormalized.slice(4)).digest("hex"));
     expect(salePayload.costStatus).toBe("VERIFIED");
     expect(salePayload.cogsNpr).toBe("600.00");
 
@@ -160,7 +165,7 @@ describe("Phase 7 POS returns and refunds", () => {
     const returnPayload = returnOutbox.payload as Record<string, unknown>;
     const customer = await prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
     const expectedPhoneHash = createHash("sha256")
-      .update(customer.phoneNormalized.replace(/^\\+977/, ""))
+      .update(customer.phoneNormalized.slice(4))
       .digest("hex");
     expect(returnOutbox.eventKey).toBe(`pos-return:${firstReturnId}`);
     expect(returnPayload.eventType).toBe("POS_SALE_RETURNED");
