@@ -11,8 +11,14 @@ Required production environment:
 - `AUTH_SECRET` — unique random value, minimum 48 characters
 - `APP_URL` — HTTPS URL
 - `SESSION_TTL_HOURS`
+- `ENABLE_REAL_CUSTOMER_ORDERS=false` until the production end-to-end release gate passes
 
 Never commit production secrets.
+
+Customer COD-order creation fails closed in production unless
+`ENABLE_REAL_CUSTOMER_ORDERS=true`. Keep it `false` through deployment and
+production verification. Enable it only after the complete production order
+journey and recovery checks pass.
 
 ### First production bootstrap
 
