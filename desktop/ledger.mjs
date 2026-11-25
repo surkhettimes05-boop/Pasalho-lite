@@ -63,6 +63,8 @@ export class DesktopLedger {
       CREATE TABLE IF NOT EXISTS clock_guard (id INTEGER PRIMARY KEY CHECK(id=1), last_seen TEXT NOT NULL);
       CREATE TRIGGER IF NOT EXISTS immutable_sale_update BEFORE UPDATE ON sale BEGIN SELECT RAISE(ABORT,'immutable sale'); END;
       CREATE TRIGGER IF NOT EXISTS immutable_sale_delete BEFORE DELETE ON sale BEGIN SELECT RAISE(ABORT,'immutable sale'); END;
+      CREATE TRIGGER IF NOT EXISTS immutable_item_update BEFORE UPDATE ON sale_item BEGIN SELECT RAISE(ABORT,'immutable item'); END;
+      CREATE TRIGGER IF NOT EXISTS immutable_item_delete BEFORE DELETE ON sale_item BEGIN SELECT RAISE(ABORT,'immutable item'); END;
       CREATE TRIGGER IF NOT EXISTS immutable_payment_update BEFORE UPDATE ON cash_payment BEGIN SELECT RAISE(ABORT,'immutable payment'); END;
       CREATE TRIGGER IF NOT EXISTS immutable_payment_delete BEFORE DELETE ON cash_payment BEGIN SELECT RAISE(ABORT,'immutable payment'); END;
       CREATE TRIGGER IF NOT EXISTS immutable_movement_update BEFORE UPDATE ON inventory_movement BEGIN SELECT RAISE(ABORT,'immutable movement'); END;
@@ -170,7 +172,7 @@ export class DesktopLedger {
       this.db.prepare('INSERT INTO cash_payment VALUES (?,?,?)').run(command.transactionId, total, command.tenderedCents);
       this.db.prepare('INSERT INTO audit VALUES (?,?,?,?,?)').run(randomUUID(), command.transactionId, 'LOCAL_CASH_SALE_COMMITTED', JSON.stringify({ payloadHash: hash(payloadText), amountCents: total }), payload.createdAt);
       this.db.prepare('INSERT INTO outbox VALUES (?,?,?,?)').run(command.transactionId, 'PENDING_SYNC', null, payload.createdAt);
-      this.db.prepare('UPDATE clock_guard SET last_seen=? WHERE id=1').run(payload.createdAt);
+      this.db.prepare('UPDATE clock_guard SET last_seen=MAX(last_seen,?) WHERE id=1').run(payload.createdAt);
       this.db.exec('COMMIT');
       return { payload, signature, replay: false };
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
