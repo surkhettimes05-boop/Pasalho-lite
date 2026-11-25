@@ -129,3 +129,31 @@ process.exit(0);`;
     } finally { recovered.close(); }
   } finally { rmSync(dir,{recursive:true,force:true}); }
 });
+
+test('restored backup retains backend binding and signed pending receipt; corrupt ledger releases file', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pasalho-recovery-'));
+  try {
+    const original = join(dir,'original.sqlite'), restored = join(dir,'replacement.sqlite'), archive = join(dir,'safe.backup');
+    const snapshot = fixture(), keys = generateTerminalKey();
+    const ledger = new DesktopLedger(original);
+    ledger.bindBackend('https://pos.example.test');
+    ledger.provision(snapshot,keys.privateKeyPem,'terminal passphrase 123');
+    ledger.finalize({transactionId:randomUUID(),items:[{productId:snapshot.products[0].productId,quantity:1}],tenderedCents:12500});
+    const pending = ledger.pending();
+    await ledger.backupTo(archive,'independent backup phrase');
+    ledger.close();
+    DesktopLedger.restoreFrom(archive,restored,'independent backup phrase');
+    const recovered = new DesktopLedger(restored);
+    try {
+      assert.equal(recovered.backendOrigin(),'https://pos.example.test');
+      assert.throws(()=>recovered.bindBackend('https://wrong.example.test'),/identity mismatch/);
+      assert.deepEqual(recovered.pending(),pending);
+      recovered.unlock('terminal passphrase 123');
+      assert.equal(recovered.status().unlocked,true);
+    } finally { recovered.close(); }
+    const corrupt = join(dir,'corrupt.sqlite');
+    writeFileSync(corrupt,Buffer.alloc(4096,42));
+    assert.throws(()=>new DesktopLedger(corrupt));
+    rmSync(corrupt);
+  } finally { rmSync(dir,{recursive:true,force:true}); }
+});
