@@ -32,6 +32,11 @@ function openLedger(filename) {
     } catch (error) { db.exec("ROLLBACK"); throw error; }
     return get.get(id);
   }
-  return { save, get: id => get.get(id), list: () => db.prepare("SELECT * FROM sale_envelope ORDER BY rowid").all(), close: () => db.close() };
+  function recover() {
+    return db.prepare("SELECT id,iv,ciphertext,signature,state FROM sale_envelope ORDER BY rowid").all().map(row => ({
+      id: row.id, encryptedPayload: {iv: row.iv, ciphertext: row.ciphertext}, signature: row.signature, state: row.state
+    }));
+  }
+  return { save, recover, get: id => get.get(id), list: () => db.prepare("SELECT * FROM sale_envelope ORDER BY rowid").all(), close: () => db.close() };
 }
 module.exports = { openLedger };
