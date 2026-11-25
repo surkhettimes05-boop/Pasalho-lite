@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createPublicKey, randomUUID, verify } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { _electron as electron } from '@playwright/test';
 import { DesktopLedger, generateTerminalKey } from './ledger.mjs';
 
@@ -43,7 +44,9 @@ test('installed shell finalizes keyboard-wedge cash sale and recovers it after r
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   writeFileSync(join(dir, 'settings.json'), JSON.stringify({ backendUrl: `http://127.0.0.1:${server.address().port}` }));
-  const launch = () => electron.launch({ executablePath: join(import.meta.dirname, 'node_modules', 'electron', 'dist', 'electron.exe'), args: [import.meta.dirname], env: { ...process.env, NODE_ENV: 'test', PASALHO_DESKTOP_TEST_DIR: dir, PASALHO_DESKTOP_TEST_PRINT_FAIL: '1' } });
+  const executablePath = createRequire(import.meta.url)('electron');
+  assert.ok(existsSync(executablePath), `Electron executable missing: ${executablePath}`);
+  const launch = () => electron.launch({ executablePath, cwd: import.meta.dirname, args: [import.meta.dirname], env: { ...process.env, NODE_ENV: 'test', PASALHO_DESKTOP_TEST_DIR: dir, PASALHO_DESKTOP_TEST_PRINT_FAIL: '1' } });
   let app;
   try {
     app = await launch();
