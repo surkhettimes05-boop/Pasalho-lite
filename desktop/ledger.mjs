@@ -54,6 +54,8 @@ export class DesktopLedger {
     if (this.db.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw new Error('SQLite integrity check failed. Stop billing and restore a verified backup.');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS backend_identity (id INTEGER PRIMARY KEY CHECK(id=1), origin TEXT NOT NULL);
+      CREATE TRIGGER IF NOT EXISTS immutable_backend_update BEFORE UPDATE ON backend_identity BEGIN SELECT RAISE(ABORT,'immutable backend identity'); END;
+      CREATE TRIGGER IF NOT EXISTS immutable_backend_delete BEFORE DELETE ON backend_identity BEGIN SELECT RAISE(ABORT,'immutable backend identity'); END;
       CREATE TABLE IF NOT EXISTS terminal (id TEXT PRIMARY KEY, store_id TEXT NOT NULL, cashier_id TEXT NOT NULL, encrypted_key TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS snapshot (id TEXT PRIMARY KEY, terminal_id TEXT NOT NULL REFERENCES terminal(id), body TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS sale (id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL REFERENCES snapshot(id), payload TEXT NOT NULL, signature TEXT NOT NULL, command_hash TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -223,7 +225,17 @@ export class DesktopLedger {
       const fd = openSync(sealedTemp, 'wx', 0o600);
       try { writeFileSync(fd, encrypted); fsyncSync(fd); } finally { closeSync(fd); }
       const { linkSync } = await import('node:fs');
-      linkSync(sealedTemp, destination);
+      try { linkSync(sealedTemp, destination); }
+      catch (error) {
+        if (!['EPERM','ENOTSUP','EOPNOTSUPP','ENOSYS','EXDEV','EINVAL'].includes(error.code)) throw error;
+        // FAT/exFAT fallback: exclusive creation, never overwrite an existing archive.
+        const output = openSync(destination, 'wx', 0o600);
+        try {
+          try { writeFileSync(output, encrypted); fsyncSync(output); }
+          finally { closeSync(output); }
+          if (hash(readFileSync(destination)) !== hash(encrypted)) throw new Error('Backup readback mismatch.');
+        } catch (failure) { rmSync(destination, {force:true}); throw failure; }
+      }
       return { destination, sha256: hash(encrypted), bytes: Buffer.byteLength(encrypted) };
     } finally { rmSync(temp, { force: true }); rmSync(sealedTemp, { force: true }); }
   }
