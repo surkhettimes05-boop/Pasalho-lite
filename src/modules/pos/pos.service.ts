@@ -13,6 +13,7 @@ import { assertRole } from "@/lib/auth/authorization";
 import type { SessionUser } from "@/lib/auth/session";
 import { BusinessError } from "@/lib/business-error";
 import { prisma } from "@/lib/db";
+import { verifiedCreatorPhoneHash } from "@/modules/creator-attribution/customer-identity";
 import { recordPhysicalInventoryMovement } from "@/modules/inventory/inventory.service";
 import {
   applyEligibleSpend,
@@ -406,15 +407,8 @@ async function finalizeSaleTransaction(
             })
           : null;
 
-      if (sale.customerId && sale.customer?.phoneNormalized) {
-        const phoneDigest = await crypto.subtle.digest(
-          "SHA-256",
-          new TextEncoder().encode(sale.customer.phoneNormalized.replace(/^\\+977/, "")),
-        );
-        const customerPhoneHash = Array.from(new Uint8Array(phoneDigest))
-          .map((byte) => byte.toString(16).padStart(2, "0"))
-          .join("");
-
+      const customerPhoneHash = verifiedCreatorPhoneHash(sale.customer);
+      if (customerPhoneHash) {
         await tx.creatorAttributionOutbox.create({
           data: {
             saleId: sale.id,
