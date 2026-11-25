@@ -16,9 +16,9 @@
   function render() {
     $('backend').value = state.backendUrl || '';
     const ready = state.provisioned && state.unlocked;
-    show('setup', !state.provisioned && !state.ledgerError);
+    show('setup', (!state.provisioned || !state.backendUrl) && !state.ledgerError);
     show('unlock', state.provisioned && !state.unlocked);
-    show('recovery', !!state.ledgerError);
+    show('recovery', !!state.ledgerError || !state.provisioned);
     for (const id of ['status', 'catalog-panel', 'cart-panel', 'history-panel']) show(id, ready);
     if (state.ledgerError) { message(`Local database unavailable: ${state.ledgerError}`); return; }
     if (!ready) return;
@@ -115,7 +115,7 @@
     if (!confirm(`Review renewed tax inclusive prices:\n${prices.map((p) => `${p.name}: ${money(p.old)} → ${money(p.priceCents)}`).join('\n')}`)) return;
     state = await window.pasalho.renew({ approvedPrices: prices.map(({ productId, priceCents }) => ({ productId, priceCents })) }); state.backendUrl = $('backend').value; render();
   });
-  $('backup').onclick = () => run(async () => { const phrase = prompt('Enter an independent backup passphrase (12+ characters). Store it separately from the backup.'); if (!phrase) return; const result = await window.pasalho.backup(phrase); message(result ? `Encrypted backup saved: ${result.destination}\nSHA-256: ${result.sha256}` : 'Backup cancelled.'); });
-  $('restore').onclick = () => run(async () => { const phrase = prompt('Enter the independent backup passphrase.'); if (!phrase) return; state = await window.pasalho.restore(phrase); render(); message('Backup restored. Unlock the terminal and reconcile every pending receipt.'); });
+  $('backup').onclick = () => run(async () => { const phrase = $('backup-phrase').value; $('backup-phrase').value = ''; if (!phrase) return; const result = await window.pasalho.backup(phrase); message(result ? `Encrypted backup saved: ${result.destination}\nSHA-256: ${result.sha256}` : 'Backup cancelled.'); });
+  $('restore').onclick = () => run(async () => { const phrase = $('restore-phrase').value; $('restore-phrase').value = ''; if (!phrase) return; state = await window.pasalho.restore(phrase); if (!state) return; await refresh(); message('Backup restored. Unlock the terminal and reconcile every pending receipt.'); });
   refresh().catch((error) => message(error.message));
 })();
