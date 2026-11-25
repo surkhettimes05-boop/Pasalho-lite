@@ -1,8 +1,8 @@
 "use strict";
-const { app, BrowserWindow, protocol, ipcMain, session } = require("electron");
-const { readFile } = require("node:fs/promises");
-const { join } = require("node:path");
-const { openLedger } = require("./ledger.cjs");
+const { app, BrowserWindow, protocol, ipcMain, session } = require("electron"); // eslint-disable-line @typescript-eslint/no-require-imports
+const { readFile } = require("node:fs/promises"); // eslint-disable-line @typescript-eslint/no-require-imports
+const { join } = require("node:path"); // eslint-disable-line @typescript-eslint/no-require-imports
+const { openLedger } = require("./ledger.cjs"); // eslint-disable-line @typescript-eslint/no-require-imports
 protocol.registerSchemesAsPrivileged([{scheme:"pasalho", privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 const origin = "pasalho://terminal";
 const page = origin + "/offline-pos.html";
