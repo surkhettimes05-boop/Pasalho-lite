@@ -16,7 +16,7 @@ import {
   getPosMembershipSnapshot,
   quotePosPricing,
 } from "@/modules/pricing/pricing.service";
-import { reconcileInventoryBalance } from "@/modules/inventory/inventory.service";
+import { adjustInventory, reconcileInventoryBalance } from "@/modules/inventory/inventory.service";
 import { createCustomer } from "@/modules/customers/customer.service";
 import { finalizeSale } from "@/modules/pos/pos.service";
 import { createProduct, updateProduct } from "@/modules/products/product.service";
@@ -329,6 +329,23 @@ describe("Phase 4 POS", () => {
     });
     expect(result.payment.amount.toFixed(2)).toBe("95.00");
     expect((await storeBalance()).onHand.toString()).toBe("16");
+  });
+
+  it("does not queue creator credit for a cashier-entered unverified phone", async () => {
+    const customer = await createCustomer(cashier, {
+      phone: `98${suffix.replace(/\D/g, "").padEnd(8, "8").slice(0, 8)}`,
+      name: "Unverified Creator Test Customer",
+      notes: "",
+    });
+    const result = await finalizeSale(cashier, {
+      idempotencyKey: `phase4-unverified-creator-${suffix}`,
+      paymentMethod: PaymentMethod.CASH,
+      customerId: customer.id,
+      items: [{ productId, quantity: "1" }],
+    });
+    expect(result.sale.status).toBe(SaleStatus.FINALIZED);
+    expect(await prisma.creatorAttributionOutbox.findUnique({ where: { saleId: result.sale.id } })).toBeNull();
+    await adjustInventory(owner, { productId, locationId: storeId, direction: "IN", quantity: "1", reason: "Restore isolated unverified creator test stock", idempotencyKey: `phase4-unverified-creator-restore-${suffix}` });
   });
 
   it("uses authoritative founding tier and excludes suspended members", async () => {
