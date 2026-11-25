@@ -31,6 +31,12 @@ else app.whenReady().then(async () => {
     return ledger.recover();
   });
   await window.loadURL(page);
+  if (process.argv.includes("--review-smoke")) {
+    const result = await window.webContents.executeJavaScript("({bridge:typeof window.pasalhoDesktop?.recoverEnvelopes, node:typeof window.require, url:location.href})");
+    if (result.bridge !== "function" || result.node !== "undefined" || result.url !== page) throw new Error("Desktop security smoke failed");
+    console.log("Desktop runtime smoke passed");
+    app.quit();
+  }
 }).catch(error=>{console.error(error);app.exit(1);});
 app.on("window-all-closed",()=>app.quit());
 app.on("will-quit",()=>ledger?.close());
