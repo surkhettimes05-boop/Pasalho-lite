@@ -1,3 +1,3 @@
 "use strict";
 const { contextBridge, ipcRenderer } = require("electron");
-contextBridge.exposeInMainWorld("pasalhoDesktop",Object.freeze({saveEnvelope:record=>ipcRenderer.invoke("ledger:save",record)}));
+contextBridge.exposeInMainWorld("pasalhoDesktop",Object.freeze({saveEnvelope:record=>ipcRenderer.invoke("ledger:save",record),recoverEnvelopes:()=>ipcRenderer.invoke("ledger:recover")}));
