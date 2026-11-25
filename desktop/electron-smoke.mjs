@@ -42,7 +42,7 @@ test('installed shell finalizes keyboard-wedge cash sale and recovers it after r
       if (previous) assert.deepEqual(body, previous);
       else { committed.set(payload.transactionId, body); synced++; }
       // Simulate a committed server sale whose acknowledgment is lost.
-      if (attempts === 1) { response.destroy(); return; }
+      if (attempts === 1) { response.writeHead(503, { 'content-type': 'application/json' }); response.end(JSON.stringify({ok:false,code:'ACK_UNAVAILABLE'})); return; }
       response.writeHead(200, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ ok: true, transactionId: payload.transactionId, status: 'SYNCED', saleId: payload.transactionId }));
       return;
@@ -78,7 +78,9 @@ test('installed shell finalizes keyboard-wedge cash sale and recovers it after r
     await page.locator('#login-again').click();
     const login = await loginWindow; await login.waitForLoadState();
     await page.locator('#sync').click();
-    await page.getByText(/failed|fetch|ERR_|network|socket/i).first().waitFor();
+    await page.locator('#message').filter({hasText:'ACK_UNAVAILABLE'}).waitFor();
+    assert.equal(attempts, 1);
+    assert.equal(committed.size, 1);
     assert.match(await page.locator('#history').innerText(), /PENDING_SYNC/);
     await page.locator('#sync').click();
     await page.getByText(/1 receipt\(s\) reconciled/).waitFor();
