@@ -26,6 +26,10 @@ else app.whenReady().then(async () => {
     if(event.sender!==window.webContents || event.senderFrame!==window.webContents.mainFrame || event.senderFrame.url!==page) throw new Error("Untrusted ledger caller");
     ledger.save(record); return true;
   });
+  ipcMain.handle("ledger:recover", event=>{
+    if(event.sender!==window.webContents || event.senderFrame!==window.webContents.mainFrame || event.senderFrame.url!==page) throw new Error("Untrusted ledger caller");
+    return ledger.recover();
+  });
   await window.loadURL(page);
 }).catch(error=>{console.error(error);app.exit(1);});
 app.on("window-all-closed",()=>app.quit());
