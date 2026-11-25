@@ -23,6 +23,8 @@ test('installed shell finalizes keyboard-wedge cash sale and recovers it after r
   ledger.provision(snapshot, key.privateKeyPem, 'terminal passphrase 123');
   ledger.close();
   let synced = 0;
+  let attempts = 0;
+  const committed = new Map();
   const server = createServer(async (request, response) => {
     if (request.url === '/login') {
       response.writeHead(200, { 'content-type': 'text/html', 'set-cookie': 'pasalho_session=test; HttpOnly; SameSite=Lax; Path=/' });
@@ -35,7 +37,12 @@ test('installed shell finalizes keyboard-wedge cash sale and recovers it after r
       let raw = ''; for await (const chunk of request) raw += chunk;
       const body = JSON.parse(raw), payload = JSON.parse(body.payload);
       assert.equal(verify('sha256', Buffer.from(body.payload), { key: createPublicKey({ key: key.publicKeyJwk, format: 'jwk' }), dsaEncoding: 'ieee-p1363' }, Buffer.from(body.signature, 'base64')), true);
-      synced++;
+      attempts++;
+      const previous = committed.get(payload.transactionId);
+      if (previous) assert.deepEqual(body, previous);
+      else { committed.set(payload.transactionId, body); synced++; }
+      // Simulate a committed server sale whose acknowledgment is lost.
+      if (attempts === 1) { response.destroy(); return; }
       response.writeHead(200, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ ok: true, transactionId: payload.transactionId, status: 'SYNCED', saleId: payload.transactionId }));
       return;
@@ -71,11 +78,16 @@ test('installed shell finalizes keyboard-wedge cash sale and recovers it after r
     await page.locator('#login-again').click();
     const login = await loginWindow; await login.waitForLoadState();
     await page.locator('#sync').click();
+    await page.getByText(/failed|fetch|ERR_|network|socket/i).first().waitFor();
+    assert.match(await page.locator('#history').innerText(), /PENDING_SYNC/);
+    await page.locator('#sync').click();
     await page.getByText(/1 receipt\(s\) reconciled/).waitFor();
     assert.match(await page.locator('#history').innerText(), /SYNCED/);
     await page.locator('#sync').click();
     await page.getByText(/0 receipt\(s\) reconciled/).waitFor();
     assert.equal(synced, 1);
+    assert.equal(attempts, 2);
+    assert.equal(committed.size, 1);
   } finally {
     if (app) await app.close();
     server.closeAllConnections();
