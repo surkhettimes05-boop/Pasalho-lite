@@ -172,6 +172,13 @@ const posCustomer = await createCustomer(cashier, {
   name: "Canonical POS Attribution Customer",
   notes: "",
 });
+const posIdentityId = randomUUID();
+await prisma.customer.update({ where: { id: posCustomer.id }, data: { membershipIdentityId: posIdentityId } });
+restorePricingMock.setMembershipProfile(posIdentityId, {
+  membershipNumber: 42,
+  membershipTier: "REGISTERED_MEMBER",
+  membershipStatus: "SUSPENDED",
+});
 
 const posSale = await finalizeSale(cashier, {
   idempotencyKey: `e2e-pos-${suffix}`,
@@ -186,7 +193,7 @@ eq(posSaleItem.unitCostSnapshot?.toFixed(2) ?? "MISSING", "100.00", "POS sale-ti
 const posCreatorOutbox = await prisma.creatorAttributionOutbox.findUnique({
   where: { saleId: posSale.sale.id },
 });
-assert(posCreatorOutbox, "customer-linked POS sale creates creator attribution outbox event");
+assert(posCreatorOutbox, "verified-linked POS sale creates creator attribution outbox event");
 const posCreatorPayload = posCreatorOutbox.payload as Record<string, unknown>;
 eq(String(posCreatorPayload.cogsNpr), "300.00", "POS creator outbox COGS snapshot");
 eq(String(posCreatorPayload.costStatus), "VERIFIED", "POS creator outbox cost status");
