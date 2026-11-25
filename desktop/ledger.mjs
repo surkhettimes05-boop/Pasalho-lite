@@ -49,9 +49,11 @@ export class DesktopLedger {
     mkdirSync(dirname(path), { recursive: true });
     this.path = path;
     this.db = new DatabaseSync(path, { timeout: 5000 });
+    try {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;');
     if (this.db.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw new Error('SQLite integrity check failed. Stop billing and restore a verified backup.');
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS backend_identity (id INTEGER PRIMARY KEY CHECK(id=1), origin TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS terminal (id TEXT PRIMARY KEY, store_id TEXT NOT NULL, cashier_id TEXT NOT NULL, encrypted_key TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS snapshot (id TEXT PRIMARY KEY, terminal_id TEXT NOT NULL REFERENCES terminal(id), body TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS sale (id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL REFERENCES snapshot(id), payload TEXT NOT NULL, signature TEXT NOT NULL, command_hash TEXT NOT NULL, created_at TEXT NOT NULL);
@@ -73,6 +75,19 @@ export class DesktopLedger {
       CREATE TRIGGER IF NOT EXISTS immutable_audit_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT,'immutable audit'); END;
     `);
     this.privateKey = null;
+    } catch (error) { this.db.close(); throw error; }
+  }
+
+  backendOrigin() {
+    return this.db.prepare('SELECT origin FROM backend_identity WHERE id=1').get()?.origin ?? null;
+  }
+
+  bindBackend(origin) {
+    const url = new URL(origin);
+    if (url.origin !== origin || (url.protocol !== 'https:' && !(process.env.NODE_ENV === 'test' && url.protocol === 'http:' && ['localhost','127.0.0.1'].includes(url.hostname)))) throw new Error('Invalid backend origin.');
+    const existing = this.backendOrigin();
+    if (existing && existing !== origin) throw new Error('Backend identity mismatch.');
+    this.db.prepare('INSERT OR IGNORE INTO backend_identity VALUES (1,?)').run(origin);
   }
 
   provision(snapshot, privateKeyPem, passphrase) {
@@ -196,7 +211,8 @@ export class DesktopLedger {
 
   async backupTo(destination, passphrase) {
     if (existsSync(destination)) throw new Error('Backup destination already exists.');
-    const temp = `${destination}.${randomUUID()}.sqlite`;
+    const temp = `${this.path}.${randomUUID()}.backup-temp.sqlite`;
+    const sealedTemp = `${destination}.${randomUUID()}.partial`;
     try {
       await sqliteBackup(this.db, temp);
       const check = new DatabaseSync(temp, { readOnly: true });
@@ -204,10 +220,12 @@ export class DesktopLedger {
       check.close();
       if (!good) throw new Error('Backup integrity verification failed.');
       const encrypted = seal(readFileSync(temp), passphrase);
-      const fd = openSync(destination, 'wx', 0o600);
+      const fd = openSync(sealedTemp, 'wx', 0o600);
       try { writeFileSync(fd, encrypted); fsyncSync(fd); } finally { closeSync(fd); }
+      const { linkSync } = await import('node:fs');
+      linkSync(sealedTemp, destination);
       return { destination, sha256: hash(encrypted), bytes: Buffer.byteLength(encrypted) };
-    } finally { rmSync(temp, { force: true }); }
+    } finally { rmSync(temp, { force: true }); rmSync(sealedTemp, { force: true }); }
   }
 
   static restoreFrom(source, destination, passphrase) {
