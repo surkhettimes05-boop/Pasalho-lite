@@ -20,8 +20,7 @@ test('installed shell finalizes keyboard-wedge cash sale and recovers it after r
   };
   const ledger = new DesktopLedger(join(dir, 'cash-ledger.sqlite'));
   const key = generateTerminalKey();
-  ledger.provision(snapshot, key.privateKeyPem, 'terminal passphrase 123');
-  ledger.close();
+
   let synced = 0;
   let attempts = 0;
   const committed = new Map();
@@ -50,7 +49,17 @@ test('installed shell finalizes keyboard-wedge cash sale and recovers it after r
     response.writeHead(404); response.end();
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  writeFileSync(join(dir, 'settings.json'), JSON.stringify({ backendUrl: `http://127.0.0.1:${server.address().port}` }));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const oldEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'test';
+    ledger.bindBackend(origin);
+    ledger.provision(snapshot, key.privateKeyPem, 'terminal passphrase 123');
+  } finally {
+    if (oldEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = oldEnv;
+    ledger.close();
+  }
+  writeFileSync(join(dir, 'settings.json'), JSON.stringify({ backendUrl: origin }));
   const executablePath = createRequire(import.meta.url)('electron');
   assert.ok(existsSync(executablePath), `Electron executable missing: ${executablePath}`);
   const launch = () => electron.launch({ executablePath, cwd: import.meta.dirname, args: [import.meta.dirname], env: { ...process.env, NODE_ENV: 'test', PASALHO_DESKTOP_TEST_DIR: dir, PASALHO_DESKTOP_TEST_PRINT_FAIL: '1' } });
