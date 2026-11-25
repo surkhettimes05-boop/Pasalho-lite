@@ -1,11 +1,11 @@
 "use strict";
-const { test } = require("node:test");
-const assert = require("node:assert/strict");
-const { mkdtempSync, rmSync } = require("node:fs");
-const { tmpdir } = require("node:os");
-const { join } = require("node:path");
-const { randomUUID, randomBytes } = require("node:crypto");
-const { openLedger } = require("./ledger.cjs");
+const { test } = require("node:test"); // eslint-disable-line @typescript-eslint/no-require-imports
+const assert = require("node:assert/strict"); // eslint-disable-line @typescript-eslint/no-require-imports
+const { mkdtempSync, rmSync } = require("node:fs"); // eslint-disable-line @typescript-eslint/no-require-imports
+const { tmpdir } = require("node:os"); // eslint-disable-line @typescript-eslint/no-require-imports
+const { join } = require("node:path"); // eslint-disable-line @typescript-eslint/no-require-imports
+const { randomUUID, randomBytes } = require("node:crypto"); // eslint-disable-line @typescript-eslint/no-require-imports
+const { openLedger } = require("./ledger.cjs"); // eslint-disable-line @typescript-eslint/no-require-imports
 test("committed encrypted envelopes survive reopening; replay cannot overwrite", () => {
   const directory = mkdtempSync(join(tmpdir(),"pasalho-ledger-"));
   const filename = join(directory,"ledger.sqlite");
