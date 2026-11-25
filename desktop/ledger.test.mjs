@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -90,4 +91,41 @@ test('expired approval and failed finalization leave no financial rows', () => {
     assert.equal(ledger.db.prepare('SELECT COUNT(*) AS n FROM outbox').get().n, 0);
     ledger.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('50 offline sales reconcile cash, stock and outbox after abrupt process exit', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pasalho-crash-'));
+  const path = join(dir, 'ledger.sqlite');
+  try {
+    const snapshot = fixture(), keys = generateTerminalKey();
+    snapshot.products[0].availableUnits = 100;
+    const ledger = new DesktopLedger(path);
+    ledger.provision(snapshot, keys.privateKeyPem, 'terminal passphrase 123');
+    ledger.close();
+    const commands = Array.from({length:50}, () => ({transactionId:randomUUID(),items:[{productId:snapshot.products[0].productId,quantity:1}],tenderedCents:15000}));
+    const worker = `import { DesktopLedger } from ${JSON.stringify(new URL('./ledger.mjs', import.meta.url).href)};
+const ledger = new DesktopLedger(${JSON.stringify(path)});
+ledger.unlock('terminal passphrase 123');
+for (const command of ${JSON.stringify(commands)}) ledger.finalize(command);
+process.exit(0);`;
+    const child = spawnSync(process.execPath, ['--input-type=module','-e',worker], {encoding:'utf8',timeout:30000});
+    assert.equal(child.status,0,child.stderr);
+    const recovered = new DesktopLedger(path);
+    try {
+      recovered.unlock('terminal passphrase 123');
+      assert.equal(recovered.pending().length,50);
+      for (const command of commands) assert.equal(recovered.finalize(command).replay,true);
+      assert.equal(recovered.db.prepare('SELECT COUNT(*) AS n FROM sale').get().n,50);
+      assert.equal(recovered.db.prepare('SELECT SUM(amount_cents) AS n FROM cash_payment').get().n,625000);
+      assert.equal(recovered.db.prepare('SELECT SUM(quantity_delta) AS n FROM inventory_movement').get().n,-50);
+      assert.equal(recovered.db.prepare('SELECT COUNT(*) AS n FROM audit').get().n,50);
+      for (const command of commands) {
+        const ack = {transactionId:command.transactionId,status:'SYNCED',saleId:command.transactionId};
+        recovered.acknowledge(command.transactionId,ack);
+        recovered.acknowledge(command.transactionId,ack);
+      }
+      assert.equal(recovered.pending().length,0);
+      assert.equal(recovered.history().length,50);
+    } finally { recovered.close(); }
+  } finally { rmSync(dir,{recursive:true,force:true}); }
 });
