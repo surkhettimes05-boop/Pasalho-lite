@@ -211,5 +211,8 @@ jobs:
       - run: npm audit --prefix desktop --audit-level=high
       - run: npm ci --legacy-peer-deps
       - run: npm test --prefix desktop
-      - run: node --test desktop/electron-smoke.mjs
+      - name: Electron runtime smoke with launch diagnostics
+        env:
+          DEBUG: pw:browser
+        run: node --test desktop/electron-smoke.mjs
       - run: npm --prefix desktop run make
