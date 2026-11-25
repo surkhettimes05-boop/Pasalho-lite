@@ -230,6 +230,10 @@
       const signature = bytesToBase64(new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, new TextEncoder().encode(payloadText))));
       const encryptedPayload = await encrypt(payloadText);
       const record = { id: transactionId, state: "PENDING_SYNC", encryptedPayload, signature, error: null, updatedAt: createdAt };
+      if (window.pasalhoDesktop) {
+        try { await window.pasalhoDesktop.saveEnvelope(record); }
+        catch { halted = true; throw new Error("Desktop storage write failed. Stop billing and contact the owner."); }
+      }
       await write("sales", record);
       const persisted = await read("sales", transactionId);
       if (!persisted || await decrypt(persisted.encryptedPayload) !== payloadText || persisted.signature !== signature) throw new Error("Local transaction verification failed. Stop billing.");
@@ -330,6 +334,7 @@
   async function init() {
     try {
       if (!isSecureContext || !indexedDB || !crypto.subtle) throw new Error("HTTPS and a supported browser are required.");
+      if (window.pasalhoDesktop) throw new Error("Desktop review runtime: billing disabled until provisioning and recovery integration are verified.");
       db = await openDatabase(); config = await read("config", "terminal");
       if (!config) { show("unlock-panel", false); show("setup-panel", true); await loadCandidates(); }
       if ("serviceWorker" in navigator) navigator.serviceWorker.register("/offline-pos-sw.js").catch(() => {});
