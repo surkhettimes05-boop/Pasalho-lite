@@ -81,7 +81,7 @@ async function syncSales(includeReview = false) {
 function setupIpc() {
   ipcMain.handle('pos:status', safe(() => ({ ...(ledger ? ledger.status() : { provisioned: false, unlocked: false, snapshot: null, counts: [], sales: [] }), backendUrl, ledgerError: ledgerError || null })));
   ipcMain.handle('pos:configure', safe((value) => {
-    if (requireLedger().snapshot()) throw new Error('Backend cannot change after terminal provisioning.');
+    if (requireLedger().snapshot() && backendUrl) throw new Error('Backend cannot change after terminal provisioning.');
     backendUrl = normalizedBackend(value);
     writeFileSync(settingsPath(), JSON.stringify({ backendUrl }), { flag: 'w', mode: 0o600 });
     return backendUrl;
@@ -109,7 +109,10 @@ function setupIpc() {
   ipcMain.handle('pos:unlock', safe((passphrase) => requireLedger().unlock(passphrase)));
   ipcMain.handle('pos:lock', safe(() => { requireLedger().lock(); return requireLedger().status(); }));
   ipcMain.handle('pos:finalize', safe((input) => ({ ...requireLedger().finalize(input), status: requireLedger().status() })));
-  ipcMain.handle('pos:sync', safe(syncSales));
+  ipcMain.handle('pos:sync', safe((includeReview) => {
+    if (!requireLedger().status().unlocked) throw new Error('Unlock the terminal before synchronization.');
+    return syncSales(includeReview === true);
+  }));
   ipcMain.handle('pos:renew', safe(async (input) => {
     const db = requireLedger();
     if (!db.status().unlocked) throw new Error('Unlock the terminal.');
@@ -136,7 +139,7 @@ function setupIpc() {
     for (const suffix of ['', '-wal', '-shm']) if (existsSync(`${ledgerPath()}${suffix}`)) renameSync(`${ledgerPath()}${suffix}`, `${preserved}${suffix}`);
     renameSync(replacement, ledgerPath());
     ledger = new DesktopLedger(ledgerPath()); ledgerError = null;
-    return ledger.status();
+    return { ...ledger.status(), backendUrl };
   }));
 }
 
