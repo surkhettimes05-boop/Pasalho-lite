@@ -28,6 +28,7 @@ function normalizedBackend(value) {
 
 async function api(path, method = 'GET', body) {
   if (!backendUrl || !['/api/offline/provision', '/api/offline/sync', '/api/ready'].includes(path)) throw new Error('Backend is not configured.');
+  if (ledger?.snapshot() && ledger.backendOrigin() !== backendUrl) throw new Error('Backend identity mismatch; synchronization blocked.');
   const response = await authSession().fetch(`${backendUrl}${path}`, {
     method, credentials: 'include', redirect: 'error', signal: AbortSignal.timeout(12_000),
     headers: { origin: backendUrl, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
@@ -82,7 +83,11 @@ function setupIpc() {
   ipcMain.handle('pos:status', safe(() => ({ ...(ledger ? ledger.status() : { provisioned: false, unlocked: false, snapshot: null, counts: [], sales: [] }), backendUrl, ledgerError: ledgerError || null })));
   ipcMain.handle('pos:configure', safe((value) => {
     if (requireLedger().snapshot() && backendUrl) throw new Error('Backend cannot change after terminal provisioning.');
-    backendUrl = normalizedBackend(value);
+    const origin = normalizedBackend(value);
+    const db = requireLedger();
+    if (db.snapshot() && db.backendOrigin() !== origin) throw new Error('Restored backend identity mismatch or missing legacy binding.');
+    db.bindBackend(origin);
+    backendUrl = origin;
     writeFileSync(settingsPath(), JSON.stringify({ backendUrl }), { flag: 'w', mode: 0o600 });
     return backendUrl;
   }));
@@ -103,6 +108,8 @@ function setupIpc() {
     const { privateKeyPem, publicKeyJwk } = generateTerminalKey();
     const terminalId = randomUUID();
     const response = await api('/api/offline/provision', 'POST', { terminalId, cashierEmail: input.cashierEmail, publicKey: { kty: publicKeyJwk.kty, crv: publicKeyJwk.crv, x: publicKeyJwk.x, y: publicKeyJwk.y }, productIds: input.approvedPrices.map((p) => p.productId), approvedPrices: input.approvedPrices, taxInclusiveApproved: true });
+    if (response.snapshot.terminalId !== terminalId) throw new Error('Provisioned terminal identity mismatch.');
+    db.bindBackend(backendUrl);
     db.provision(response.snapshot, privateKeyPem, input.passphrase);
     return db.status();
   }));
@@ -139,6 +146,8 @@ function setupIpc() {
     for (const suffix of ['', '-wal', '-shm']) if (existsSync(`${ledgerPath()}${suffix}`)) renameSync(`${ledgerPath()}${suffix}`, `${preserved}${suffix}`);
     renameSync(replacement, ledgerPath());
     ledger = new DesktopLedger(ledgerPath()); ledgerError = null;
+    backendUrl = ledger.backendOrigin();
+    if (backendUrl) writeFileSync(settingsPath(), JSON.stringify({ backendUrl }), { mode: 0o600 });
     return { ...ledger.status(), backendUrl };
   }));
 }
@@ -147,6 +156,7 @@ app.on('second-instance', () => window?.focus());
 app.whenReady().then(() => {
   try { backendUrl = normalizedBackend(JSON.parse(readFileSync(settingsPath(), 'utf8')).backendUrl); } catch { backendUrl = null; }
   try { ledger = new DesktopLedger(ledgerPath()); } catch (error) { ledgerError = error.message; }
+  if (ledger?.snapshot()) backendUrl = ledger.backendOrigin();
   setupIpc();
   window = new BrowserWindow({ width: 1200, height: 860, minWidth: 900, minHeight: 650, title: 'PASALHO POS', webPreferences: { preload: join(import.meta.dirname, 'preload.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
