@@ -1,6 +1,6 @@
 "use strict";
-const { DatabaseSync } = require("node:sqlite");
-const { createHash } = require("node:crypto");
+const { DatabaseSync } = require("node:sqlite"); // eslint-disable-line @typescript-eslint/no-require-imports
+const { createHash } = require("node:crypto"); // eslint-disable-line @typescript-eslint/no-require-imports
 
 function openLedger(filename) {
   const db = new DatabaseSync(filename);
