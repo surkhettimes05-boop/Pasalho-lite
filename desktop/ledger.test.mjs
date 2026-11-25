@@ -35,6 +35,8 @@ test('commits signed cash sale, stock movement and outbox atomically; survives r
     assert.equal(ledger.db.prepare('SELECT COUNT(*) AS n FROM inventory_movement').get().n, 1);
     assert.equal(ledger.db.prepare('SELECT COUNT(*) AS n FROM audit').get().n, 1);
     assert.equal(ledger.pending().length, 1);
+    assert.throws(() => ledger.db.prepare('UPDATE sale_item SET quantity=1').run(), /immutable item/);
+    assert.throws(() => ledger.db.prepare('DELETE FROM sale_item').run(), /immutable item/);
     assert.throws(() => ledger.db.prepare('UPDATE cash_payment SET amount_cents=1').run(), /immutable payment/);
     assert.throws(() => ledger.finalize({ transactionId: randomUUID(), items: [{ productId: snapshot.products[0].productId, quantity: 2 }], tenderedCents: 30000 }), /stock is insufficient/);
     ledger.close();
