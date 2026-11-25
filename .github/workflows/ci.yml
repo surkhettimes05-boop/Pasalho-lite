@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "phase-*"
+      - feature/windows-sqlite-pos
   pull_request:
 
 permissions:
@@ -197,3 +198,18 @@ jobs:
 
           cat /tmp/pasalho-lite.log
           exit 1
+
+  windows-desktop:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --prefix desktop
+      - run: npm audit --prefix desktop --audit-level=high
+      - run: npm ci --legacy-peer-deps
+      - run: npm test --prefix desktop
+      - run: node --test desktop/electron-smoke.mjs
+      - run: npm --prefix desktop run make
