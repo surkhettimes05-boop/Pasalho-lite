@@ -16,6 +16,7 @@ test("committed encrypted envelopes survive reopening; replay cannot overwrite",
     for(const record of records) ledger.save(record);
     ledger.close(); ledger = openLedger(filename);
     assert.equal(ledger.list().length,50);
+    assert.deepEqual(ledger.recover(), records.map(record=>({...record,state:"PENDING_SYNC"})));
     ledger.save(records[0]);
     assert.equal(ledger.list().length,50);
     assert.throws(()=>ledger.save({...records[0],signature:randomBytes(64).toString("base64")}),/Conflicting transaction ID/);
