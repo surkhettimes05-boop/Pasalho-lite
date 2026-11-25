@@ -22,7 +22,7 @@ function requireLedger() {
 
 function normalizedBackend(value) {
   const url = new URL(value);
-  if (url.username || url.password || url.search || url.hash || url.pathname !== '/' || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname)))) throw new Error('Use a trusted HTTPS PASALHO Lite base URL.');
+  if (url.username || url.password || url.search || url.hash || url.pathname !== '/' || (url.protocol !== 'https:' && !(process.env.NODE_ENV === 'test' && url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname)))) throw new Error('Use a trusted HTTPS PASALHO Lite base URL.');
   return url.origin;
 }
 
@@ -41,7 +41,7 @@ async function api(path, method = 'GET', body) {
 
 function safe(handler) {
   return async (event, ...args) => {
-    if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('IPC sender denied.');
+    if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== window.webContents.getURL() || !event.senderFrame.url.startsWith('file:')) throw new Error('IPC sender denied.');
     return handler(...args);
   };
 }
@@ -91,6 +91,7 @@ function setupIpc() {
     const login = new BrowserWindow({ parent: window, width: 850, height: 700, title: 'PASALHO sign in', webPreferences: { partition: 'persist:pasalho-auth', sandbox: true, contextIsolation: true, nodeIntegration: false } });
     login.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     login.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== backendUrl) event.preventDefault(); });
+    login.webContents.on('will-redirect', (event, url) => { if (new URL(url).origin !== backendUrl) event.preventDefault(); });
     login.loadURL(`${backendUrl}/login`);
     return true;
   }));
