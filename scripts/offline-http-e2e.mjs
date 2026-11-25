@@ -3,6 +3,10 @@ import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import pg from "pg";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DesktopLedger } from "../desktop/ledger.mjs";
 import dotenv from "dotenv";
 
 dotenv.config({ path: ".env.test", override: true, quiet: true });
@@ -21,6 +25,8 @@ let temporaryDatabase;
 let app;
 let pricing;
 let sessionId;
+let desktopLedger;
+let desktopDir;
 
 async function request(path, token, options = {}) {
   const response = await fetch(`${base}${path}`, { ...options, headers: { cookie: `pasalho_session=${token}`, origin: base, "content-type": "application/json", ...options.headers } });
@@ -86,11 +92,22 @@ try {
   if (provisioned.snapshot.products[0].priceCents !== 10000) throw new Error("Snapshot price mismatch.");
   await new Promise((resolve) => pricing.close(resolve)); pricing = undefined;
 
-  const payload = JSON.stringify({ version: 1, transactionId, snapshotId: provisioned.snapshot.id, terminalId, storeId: store.id, cashierId: owner.id, createdAt: new Date().toISOString(), receiptNumber: `OFF-${transactionId.toUpperCase()}`, items: [{ productId, quantity: 1, priceCents: 10000, lineTotalCents: 10000 }], subtotalCents: 10000, discountCents: 0, taxPolicy: "REGULAR_PRICE_TAX_INCLUSIVE", payment: { method: "CASH", tenderedCents: 10000 } });
-  const signature = sign("sha256", Buffer.from(payload), { key: pair.privateKey, dsaEncoding: "ieee-p1363" }).toString("base64");
+  desktopDir = mkdtempSync(join(tmpdir(), "pasalho-http-desktop-"));
+  const ledgerPath = join(desktopDir, "ledger.sqlite");
+  desktopLedger = new DesktopLedger(ledgerPath);
+  desktopLedger.provision(provisioned.snapshot, pair.privateKey.export({type:"pkcs8",format:"pem"}), "isolated test passphrase");
+  desktopLedger.finalize({transactionId,items:[{productId,quantity:1}],tenderedCents:10000});
+  desktopLedger.close();
+  desktopLedger = new DesktopLedger(ledgerPath);
+  desktopLedger.unlock("isolated test passphrase");
+  const pending = desktopLedger.pending();
+  if (pending.length !== 1) throw new Error("Desktop receipt recovery failed.");
+  const {payload,signature} = pending[0];
   const first = await request("/api/offline/sync", token, { method: "POST", body: JSON.stringify({ payload, signature }) });
   const replay = await request("/api/offline/sync", token, { method: "POST", body: JSON.stringify({ payload, signature }) });
   if (first.status !== "SYNCED" || first.saleId !== transactionId || replay.saleId !== transactionId) throw new Error("Sync acknowledgment mismatch.");
+  desktopLedger.acknowledge(transactionId, replay);
+  if (desktopLedger.pending().length !== 0 || desktopLedger.history()[0].state !== "SYNCED") throw new Error("Desktop reconciliation failed.");
   const counts = await client.query('SELECT (SELECT count(*) FROM "Sale" WHERE "id"=$1) AS sale, (SELECT count(*) FROM "Payment" WHERE "sourceId"=$1) AS payment, (SELECT count(*) FROM "InventoryMovement" WHERE "referenceType"=$2 AND "referenceId"=$1) AS movement', [transactionId, "SALE"]);
   if (Number(counts.rows[0].sale) !== 1 || Number(counts.rows[0].payment) !== 1 || Number(counts.rows[0].movement) !== 1) throw new Error("Duplicate or missing business effect.");
   await request("/api/offline/provision", token, { method: "DELETE", body: JSON.stringify({ terminalId }) });
@@ -123,6 +140,8 @@ try {
   console.error(error instanceof Error ? error.message : error);
   throw error;
 } finally {
+  if (desktopLedger) desktopLedger.close();
+  if (desktopDir) rmSync(desktopDir,{recursive:true,force:true});
   if (app) { app.kill(); await Promise.race([new Promise((resolve) => app.once("exit", resolve)), delay(5000)]); }
   if (pricing) await new Promise((resolve) => pricing.close(resolve));
   if (sessionId && client) await client.query('DELETE FROM "Session" WHERE "id"=$1', [sessionId]);
