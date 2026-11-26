@@ -18,7 +18,8 @@ async function main() {
   const { finalizeSale } = await import("../src/modules/pos/pos.service");
   const { processReturn } = await import("../src/modules/returns/return.service");
   const { dispatchCreatorAttributionOutbox } = await import("../src/modules/creator-attribution/outbox.service");
-  const { installModernPricingMock } = await import("../tests/helpers/modern-pricing-mock");
+  assert.equal(process.env.MODERN_PRICING_API_URL, endpoint.origin);
+  assert.ok(process.env.CASHIER_TEST_SKU);
   try {
     const phase = process.env.CASHIER_TEST_PHASE;
     const phone = process.env.CASHIER_TEST_PHONE!;
@@ -27,18 +28,19 @@ async function main() {
     const owner = {id:user.id,name:user.name,email:user.email,role:Role.OWNER_ADMIN};
     const cashier = {...owner,role:Role.CASHIER_STORE};
     let eventId: string;
-    const restore = installModernPricingMock();
-    try {
+    {
       if (phase === "sale") {
         const customer = await createCustomer(cashier,{phone,name:"Cashier integration customer",notes:""});
         await prisma.customer.update({where:{id:customer.id},data:{membershipIdentityId:identity}});
-        restore.setMembershipProfile(identity,{membershipNumber:42,membershipTier:"REGISTERED_MEMBER",membershipStatus:"ACTIVE"});
-        const product = await createProduct(owner,{sku:"CASHIER-"+randomUUID(),barcode:"",name:"Cashier test product",category:"Test",unit:"pcs",costPrice:"300.00",sellingPrice:"505.00",mrp:"550.00",warehouseMinStock:"0",storeMinStock:"0",active:true});
+        const product = await createProduct(owner,{sku:process.env.CASHIER_TEST_SKU!,barcode:"",name:"Cashier test product",category:"Test",unit:"pcs",costPrice:"300.00",sellingPrice:"505.00",mrp:"550.00",warehouseMinStock:"0",storeMinStock:"0",active:true});
         const store = await prisma.location.findUniqueOrThrow({where:{code:"STORE_MAIN"}});
         await adjustInventory(owner,{productId:product.id,locationId:store.id,direction:"IN",quantity:"10",reason:"Isolated opening stock",idempotencyKey:randomUUID()});
         const input = {idempotencyKey:identity,paymentMethod:PaymentMethod.CASH,customerId:customer.id,items:[{productId:product.id,quantity:"2"}]};
         const sale = await finalizeSale(cashier,input);
         assert.equal((await finalizeSale(cashier,input)).sale.id,sale.sale.id);
+        assert.equal(Number(sale.sale.subtotal),1010);
+        assert.equal(Number(sale.sale.discountTotal),10);
+        assert.equal(Number(sale.sale.total),1000);
         eventId = sale.sale.id;
       } else {
         assert.ok(phase === "partial" || phase === "full");
@@ -48,7 +50,7 @@ async function main() {
         assert.equal((await processReturn(cashier,input)).id,result.id);
         eventId = result.id;
       }
-    } finally { restore(); }
+    }
     const key = (phase === "sale" ? "pos-sale:" : "pos-return:")+eventId;
     const row = await prisma.creatorAttributionOutbox.findUniqueOrThrow({where:{eventKey:key}});
     assert.equal(await prisma.creatorAttributionOutbox.count({where:{eventKey:key}}),1);
