@@ -223,3 +223,15 @@ jobs:
           path: desktop/out/make/**/*
           if-no-files-found: error
           retention-days: 30
+      - name: Verify portable Windows executable
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem desktop/out -Directory | Where-Object { $_.Name -like '*-win32-x64' } | ForEach-Object { Get-ChildItem $_.FullName -Filter PasalhoPOS.exe }
+          if (@($exe).Count -ne 1) { throw 'Expected exactly one packaged POS executable' }
+      - name: Upload portable Windows POS
+        uses: actions/upload-artifact@v4
+        with:
+          name: pasalho-lite-windows-portable
+          path: desktop/out/*-win32-x64/
+          if-no-files-found: error
+          retention-days: 30
