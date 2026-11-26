@@ -110,6 +110,8 @@ try {
   if (desktopLedger.pending().length !== 0 || desktopLedger.history()[0].state !== "SYNCED") throw new Error("Desktop reconciliation failed.");
   const counts = await client.query('SELECT (SELECT count(*) FROM "Sale" WHERE "id"=$1) AS sale, (SELECT count(*) FROM "Payment" WHERE "sourceId"=$1) AS payment, (SELECT count(*) FROM "InventoryMovement" WHERE "referenceType"=$2 AND "referenceId"=$1) AS movement', [transactionId, "SALE"]);
   if (Number(counts.rows[0].sale) !== 1 || Number(counts.rows[0].payment) !== 1 || Number(counts.rows[0].movement) !== 1) throw new Error("Duplicate or missing business effect.");
+  const anonymous = await client.query('SELECT (SELECT count(*) FROM "Sale" WHERE "id"=$1 AND "customerId" IS NULL) AS anonymous, (SELECT count(*) FROM "CreatorAttributionOutbox" WHERE "saleId"=$1) AS rewards', [transactionId]);
+  if (Number(anonymous.rows[0].anonymous) !== 1 || Number(anonymous.rows[0].rewards) !== 0) throw new Error("Anonymous offline cash receipt must not earn creator rewards.");
   await request("/api/offline/provision", token, { method: "DELETE", body: JSON.stringify({ terminalId }) });
   async function submitRevokedReceipt() {
     const id = randomUUID();
@@ -135,6 +137,8 @@ try {
   const settlementCounts = await client.query('SELECT (SELECT count(*) FROM "Sale" WHERE "id"=$1) AS posted_sale, (SELECT count(*) FROM "Payment" WHERE "sourceId"=$1) AS posted_payment, (SELECT count(*) FROM "InventoryMovement" WHERE "referenceType"=$3 AND "referenceId"=$1) AS posted_movement, (SELECT count(*) FROM "Sale" WHERE "id"=$2) AS refunded_sale, (SELECT count(*) FROM "CashMovement" WHERE "referenceType"=$4 AND "referenceId"=$2) AS refund_cash', [postCase.id, refundCase.id, "SALE", "OFFLINE_SUBMISSION"]);
   const s = settlementCounts.rows[0];
   if (Number(s.posted_sale) !== 1 || Number(s.posted_payment) !== 1 || Number(s.posted_movement) !== 1 || Number(s.refunded_sale) !== 0 || Number(s.refund_cash) !== 2 || refundedReplay.status !== "REFUNDED") throw new Error("Owner resolution duplicated or lost financial effects.");
+  const postedRewards = await client.query('SELECT count(*) AS n FROM "CreatorAttributionOutbox" WHERE "saleId" IN ($1,$2)', [postCase.id, refundCase.id]);
+  if (Number(postedRewards.rows[0].n) !== 0) throw new Error("Offline owner resolution must not create creator rewards.");
   console.log("HTTP E2E PASS: authenticated sync/replay and owner post/refund resolution with pricing service offline.");
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
