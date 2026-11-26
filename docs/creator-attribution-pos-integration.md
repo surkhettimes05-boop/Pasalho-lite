@@ -3,14 +3,14 @@
 Pasalho Lite remains the source of truth for physical POS sales, payment collection, customer identity and returns. It does not calculate creator rewards.
 
 ## Approved integration
-- A finalized, paid POS sale with an identified customer writes one `CreatorAttributionOutbox` row in the same Prisma transaction as sale/payment/inventory/loyalty.
+- A finalized, paid POS sale writes one `CreatorAttributionOutbox` row in the same Prisma transaction as sale/payment/inventory/loyalty only when the customer has an owner-linked Modern Trade identity previously verified against the same phone. Cashier-entered phone text alone is ineligible.
 - Anonymous sales do not create an outbox event.
 - Outbox event key is stable: `pos-sale:<sale UUID>`.
-- Payload contains POS sale ID, receipt number, normalized customer phone hash, eligible merchandise spend (NPR), finalized timestamp and schema version. Do not include customer name or raw phone.
+- Payload contains POS sale ID, receipt number, SHA-256 of Modern Trade's canonical ten-digit Nepal mobile number, eligible merchandise spend (NPR), finalized timestamp and schema version. Do not include customer name or raw phone.
 - A background/dispatch action sends the event to the central commerce attribution endpoint over HTTPS with HMAC-SHA256 request signing.
 - Delivery is at-least-once; central commerce API deduplicates by source system + transaction ID.
 - Failed delivery increments attempt count and schedules exponential retry. It must never roll back or block a finalized POS sale.
-- Returns/reversals are **not implemented in this PR**. Do not approve or settle creator rewards for returned/refunded sales until a separate signed return-adjustment outbox and central reward-reversal flow is shipped.
+- Eligible POS returns create a signed reversal outbox event using the original sale event's immutable customer hash. A sale without a creator event creates no reversal event. Central reward-reversal acceptance remains a cross-repository release gate.
 - The outbox is operational integration evidence, not a second reward ledger.
 
 ## Required configuration
@@ -20,16 +20,17 @@ Pasalho Lite remains the source of truth for physical POS sales, payment collect
 If either is missing, POS sales continue normally and outbox events remain pending with an explicit operational warning. Do not log the secret or customer identifiers.
 
 ## Acceptance tests
-- Customer sale creates exactly one outbox row in the sale transaction.
+- Verified linked customer sale creates exactly one outbox row in the sale transaction.
+- Cashier-entered unverified phone creates no creator outbox event.
 - Anonymous sale creates none.
 - Sale replay creates no duplicate outbox row.
 - Commerce API timeout does not fail POS sale.
 - Retry sends same event key and payload.
 - Server rejects invalid HMAC, stale timestamp and altered payload.
-- Refund/reversal handling is a required follow-up acceptance gate before creator reward settlement is enabled in production.
+- Refund/reversal ingestion and exact reward accounting must pass a real cross-repository acceptance test before creator reward settlement is enabled in production.
 
 ## POS COGS evidence
 
 POS COGS is calculated from the store location's moving weighted-average unit cost at the time of sale. Purchase receipts update the warehouse average; dispatch snapshots that average onto each transfer item; receiving updates the store average. The POS sale snapshots the store average onto each sale item and multiplies it by quantity.
 
-If any sold item has no verified location average cost, the outbox sends `costEvidenceStatus: "MISSING_COST"` and a null cost. The central profitability dashboard must not infer cost from the product's catalog `costPrice`.
+If any sold item has no verified location average cost, the outbox sends `costStatus: "UNKNOWN"` and a null cost. The central profitability dashboard must not infer cost from the product's catalog `costPrice`.

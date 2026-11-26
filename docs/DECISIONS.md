@@ -243,3 +243,18 @@ record a witnessed full cash refund without a sale. Both outcomes are
 immutable, idempotent, and retain the original signed receipt and audit trail.
 
 Status: APPROVED for scoped implementation on 2026-11-22
+
+## D-023 Installed Windows cash terminal
+
+The first store requires an Electron application with a local SQLite cash-sale
+ledger. This is a device-local durability component for the D-022 exception,
+not a second cloud business database or a replacement for PostgreSQL/Prisma.
+It may finalize only owner-approved, anonymous regular-price cash sales within
+the D-022 snapshot period and must retain signed receipts until server
+reconciliation. Cloud stock, sale, payment, and daily-close authority remains
+with the existing Lite application. The local receipt is provisional. An
+encrypted backup on independent media and tested restore are required before
+claiming recovery from device loss. Installed updates must preserve the local
+data directory. No automatic update or payout behavior is authorized.
+
+Status: APPROVED for scoped implementation by the final store launch assignment on 2026-11-24

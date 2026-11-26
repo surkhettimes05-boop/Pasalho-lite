@@ -74,6 +74,9 @@ beforeAll(async () => {
       notes: "",
     })
   ).id;
+  const identityId = randomUUID();
+  await prisma.customer.update({ where: { id: customerId }, data: { membershipIdentityId: identityId } });
+  restorePricingMock?.setMembershipProfile(identityId, { membershipNumber: 41, membershipTier: "REGISTERED_MEMBER", membershipStatus: "SUSPENDED" });
 
   await adjustInventory(owner, {
     productId,
@@ -123,6 +126,8 @@ describe("Phase 7 POS returns and refunds", () => {
       where: { saleId },
     });
     const salePayload = saleOutbox.payload as Record<string, unknown>;
+    const linkedCustomer = await prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
+    expect(salePayload.customerPhoneHash).toBe(createHash("sha256").update(linkedCustomer.phoneNormalized.slice(4)).digest("hex"));
     expect(salePayload.costStatus).toBe("VERIFIED");
     expect(salePayload.cogsNpr).toBe("600.00");
 
@@ -134,6 +139,27 @@ describe("Phase 7 POS returns and refunds", () => {
     });
     expect(loyalty.pointBalance).toBe(2);
     expect(loyalty.spendRemainder.toFixed(2)).toBe("200.00");
+  });
+
+  it("rejects unauthorized pricing and refunds without financial mutation", async () => {
+    const beforeStock = (await stock()).onHand.toString();
+    const beforePayment = (await payment()).refundedAmount.toFixed(2);
+    const key = "security-" + suffix;
+    const saleInput = { idempotencyKey: key, paymentMethod: PaymentMethod.CASH, customerId, items: [{ productId, quantity: "1", unitPrice: "0.01" }] };
+    await expect(finalizeSale(cashier, saleInput)).rejects.toThrow();
+    expect(await prisma.sale.count({where:{idempotencyKey:key}})).toBe(0);
+    const product = await prisma.product.findUniqueOrThrow({where:{id:productId}});
+    await expect(updateProduct(cashier, productId, {
+      sku:product.sku, barcode:product.barcode ?? "", name:product.name, category:"Test", unit:product.unit,
+      costPrice:"300.00", sellingPrice:"0.01", mrp:"650.00", warehouseMinStock:"0", storeMinStock:"0", active:true
+    })).rejects.toMatchObject({code:"UNAUTHORIZED_ACTION"});
+    expect((await prisma.product.findUniqueOrThrow({where:{id:productId}})).sellingPrice.toFixed(2)).toBe("600.00");
+    const refund = {sourceType:ReturnSourceType.SALE,sourceId:saleId,reason:"Security regression",idempotencyKey:key,items:[{originalLineId:saleLineId,quantity:"1",physicallyReturned:false,restockQuantity:"0"}]};
+    await expect(processReturn({...cashier,role:Role.WAREHOUSE_STAFF},refund)).rejects.toMatchObject({code:"UNAUTHORIZED_ACTION"});
+    await expect(processReturn(cashier,refund)).rejects.toMatchObject({code:"UNUSUAL_REFUND_REQUIRES_ADMIN"});
+    expect(await prisma.returnRecord.count({where:{idempotencyKey:key}})).toBe(0);
+    expect((await stock()).onHand.toString()).toBe(beforeStock);
+    expect((await payment()).refundedAmount.toFixed(2)).toBe(beforePayment);
   });
 
   it("returns one unit atomically: restock +1, refund Rs 600, loyalty reverses correctly", async () => {
@@ -160,7 +186,7 @@ describe("Phase 7 POS returns and refunds", () => {
     const returnPayload = returnOutbox.payload as Record<string, unknown>;
     const customer = await prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
     const expectedPhoneHash = createHash("sha256")
-      .update(customer.phoneNormalized.replace(/^\\+977/, ""))
+      .update(customer.phoneNormalized.slice(4))
       .digest("hex");
     expect(returnOutbox.eventKey).toBe(`pos-return:${firstReturnId}`);
     expect(returnPayload.eventType).toBe("POS_SALE_RETURNED");

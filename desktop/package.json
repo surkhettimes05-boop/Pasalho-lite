@@ -1,0 +1,19 @@
+{
+  "name": "pasalho-windows-pos",
+  "version": "0.1.0",
+  "description": "PASALHO offline cash register for the first Surkhet store",
+  "author": "PASALHO",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test ledger.test.mjs",
+    "make": "electron-forge make --platform win32 --arch x64"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "8.0.1",
+    "@electron-forge/maker-squirrel": "8.0.1",
+    "electron": "45.4.1"
+  }
+}

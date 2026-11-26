@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "phase-*"
+      - feature/windows-sqlite-pos
   pull_request:
 
 permissions:
@@ -197,3 +198,40 @@ jobs:
 
           cat /tmp/pasalho-lite.log
           exit 1
+
+  windows-desktop:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --prefix desktop
+      - run: npm audit --prefix desktop --audit-level=high
+      - run: npm ci --legacy-peer-deps
+      - run: npm test --prefix desktop
+      - name: Electron runtime smoke with launch diagnostics
+        env:
+          DEBUG: pw:browser
+        run: node --test desktop/electron-smoke.mjs
+      - run: npm --prefix desktop run make
+      - name: Upload Windows acceptance installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: pasalho-lite-windows-acceptance
+          path: desktop/out/make/**/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Verify portable Windows executable
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem desktop/out -Directory | Where-Object { $_.Name -like '*-win32-x64' } | ForEach-Object { Get-ChildItem $_.FullName -Filter PasalhoPOS.exe }
+          if (@($exe).Count -ne 1) { throw 'Expected exactly one packaged POS executable' }
+      - name: Upload portable Windows POS
+        uses: actions/upload-artifact@v4
+        with:
+          name: pasalho-lite-windows-portable
+          path: desktop/out/*-win32-x64/
+          if-no-files-found: error
+          retention-days: 30
