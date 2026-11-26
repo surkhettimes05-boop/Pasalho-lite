@@ -84,6 +84,17 @@ try {
   app.stderr.on("data", (chunk) => { appLog = (appLog + chunk.toString()).slice(-4000); });
   await waitForApp();
 
+  const cashierId = randomUUID(), cashierToken = randomBytes(32).toString("base64url");
+  await client.query('INSERT INTO "User" ("id","name","email","passwordHash","role","active","createdAt","updatedAt") VALUES ($1,$2,$3,$4,$5,true,now(),now())',[cashierId,"Security test cashier",cashierId+"@example.invalid","disabled-test-password","CASHIER_STORE"]);
+  await client.query('INSERT INTO "Session" ("id","tokenHash","userId","expiresAt","createdAt") VALUES ($1,$2,$3,now()+interval \'1 hour\',now())',[randomUUID(),createHmac("sha256",process.env.AUTH_SECRET).update(cashierToken).digest("hex"),cashierId]);
+  async function denied(path, auth, method, body, expected, origin=base) {
+    const response = await fetch(base+path,{method,headers:{cookie:"pasalho_session="+auth,origin,"content-type":"application/json"},...(body===undefined?{}:{body:JSON.stringify(body)})});
+    if(response.status!==expected) throw new Error("Security gate "+path+" "+method+": expected "+expected+", got "+response.status);
+  }
+  await denied("/api/offline/provision",cashierToken,"GET",undefined,403);
+  await denied("/api/offline/reviews",cashierToken,"GET",undefined,403);
+  await denied("/api/offline/provision","invalid","GET",undefined,401);
+  await denied("/api/offline/provision",token,"DELETE",{terminalId},422,"https://untrusted.example");
   const candidates = await request("/api/offline/provision", token);
   if (candidates.products.find((item) => item.productId === productId)?.priceCents !== 10000) throw new Error("Approved Modern catalog price missing.");
   const pair = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
@@ -103,6 +114,10 @@ try {
   const pending = desktopLedger.pending();
   if (pending.length !== 1) throw new Error("Desktop receipt recovery failed.");
   const {payload,signature} = pending[0];
+  const altered = JSON.stringify({...JSON.parse(payload),subtotalCents:1});
+  await denied("/api/offline/sync",token,"POST",{payload:altered,signature},422);
+  const before = await client.query('SELECT count(*) AS n FROM "Sale" WHERE "id"=$1',[transactionId]);
+  if(Number(before.rows[0].n)!==0) throw new Error("Tampered receipt created a sale");
   const first = await request("/api/offline/sync", token, { method: "POST", body: JSON.stringify({ payload, signature }) });
   const replay = await request("/api/offline/sync", token, { method: "POST", body: JSON.stringify({ payload, signature }) });
   if (first.status !== "SYNCED" || first.saleId !== transactionId || replay.saleId !== transactionId) throw new Error("Sync acknowledgment mismatch.");
@@ -126,6 +141,9 @@ try {
   }
   const postCase = await submitRevokedReceipt();
   const postInput = { transactionId: postCase.id, payloadHash: postCase.review.payloadHash, cashAmountCents: 10000, action: "POST_SALE", evidence: "Owner counted cash and stock; signed receipt accepted." };
+  await denied("/api/offline/reviews",cashierToken,"POST",postInput,403);
+  await denied("/api/offline/provision",cashierToken,"DELETE",{terminalId},403);
+  console.log("SECURITY_GATE: cashier owner routes denied; unauthenticated and cross-origin requests denied; altered receipt rejected");
   const posted = await request("/api/offline/reviews", token, { method: "POST", body: JSON.stringify(postInput) });
   const postedReplay = await request("/api/offline/reviews", token, { method: "POST", body: JSON.stringify(postInput) });
   const syncedReplay = await request("/api/offline/sync", token, { method: "POST", body: JSON.stringify({ payload: postCase.receipt, signature: postCase.signed }) });
