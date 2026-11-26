@@ -216,3 +216,10 @@ jobs:
           DEBUG: pw:browser
         run: node --test desktop/electron-smoke.mjs
       - run: npm --prefix desktop run make
+      - name: Upload Windows acceptance installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: pasalho-lite-windows-acceptance
+          path: desktop/out/make/**/*
+          if-no-files-found: error
+          retention-days: 30
