@@ -157,3 +157,23 @@ test('restored backup retains backend binding and signed pending receipt; corrup
     rmSync(corrupt);
   } finally { rmSync(dir,{recursive:true,force:true}); }
 });
+
+test('signed offline receipt rejects altered financial payload and wrong terminal key', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pasalho-signature-'));
+  try {
+    const ledger = new DesktopLedger(join(dir, 'ledger.sqlite'));
+    try {
+      const snapshot = fixture(), keys = generateTerminalKey();
+      ledger.provision(snapshot, keys.privateKeyPem, 'terminal passphrase 123');
+      const sale = ledger.finalize({transactionId:randomUUID(),items:[{productId:snapshot.products[0].productId,quantity:1}],tenderedCents:12500});
+      const signature = Buffer.from(sale.signature,'base64');
+      const check = (payload, key) => verify('sha256',Buffer.from(JSON.stringify(payload)),{key:createPublicKey({key,format:'jwk'}),dsaEncoding:'ieee-p1363'},signature);
+      assert.equal(check(sale.payload,keys.publicKeyJwk),true);
+      assert.equal(check({...sale.payload,subtotalCents:1},keys.publicKeyJwk),false);
+      assert.equal(check({...sale.payload,transactionId:randomUUID()},keys.publicKeyJwk),false);
+      assert.equal(check(sale.payload,generateTerminalKey().publicKeyJwk),false);
+      assert.equal(ledger.pending().length,1);
+      assert.equal(ledger.db.prepare('SELECT SUM(amount_cents) AS n FROM cash_payment').get().n,12500);
+    } finally { ledger.close(); }
+  } finally { rmSync(dir,{recursive:true,force:true}); }
+});
