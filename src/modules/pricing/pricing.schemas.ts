@@ -54,6 +54,12 @@ const quotePayloadFields = z
     subtotal: moneySchema,
     discountTotal: moneySchema,
     finalTotal: moneySchema,
+    campaignPromotion: z.object({
+      id: z.string().uuid(),
+      name: z.string().max(255),
+      promotionType: z.literal("PERCENTAGE"),
+      discountValue: moneySchema,
+    }).strict().nullable().optional(),
     currency: z.literal("NPR"),
     pricingRuleVersion: z.number().int().positive(),
     issuedAt: z.string().datetime(),
