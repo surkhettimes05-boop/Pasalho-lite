@@ -141,6 +141,27 @@ describe("Phase 7 POS returns and refunds", () => {
     expect(loyalty.spendRemainder.toFixed(2)).toBe("200.00");
   });
 
+  it("rejects unauthorized pricing and refunds without financial mutation", async () => {
+    const beforeStock = (await stock()).onHand.toString();
+    const beforePayment = (await payment()).refundedAmount.toFixed(2);
+    const key = "security-" + suffix;
+    const saleInput = { idempotencyKey: key, paymentMethod: PaymentMethod.CASH, customerId, items: [{ productId, quantity: "1", unitPrice: "0.01" }] };
+    await expect(finalizeSale(cashier, saleInput)).rejects.toThrow();
+    expect(await prisma.sale.count({where:{idempotencyKey:key}})).toBe(0);
+    const product = await prisma.product.findUniqueOrThrow({where:{id:productId}});
+    await expect(updateProduct(cashier, productId, {
+      sku:product.sku, barcode:product.barcode ?? "", name:product.name, category:"Test", unit:product.unit,
+      costPrice:"300.00", sellingPrice:"0.01", mrp:"650.00", warehouseMinStock:"0", storeMinStock:"0", active:true
+    })).rejects.toMatchObject({code:"UNAUTHORIZED_ACTION"});
+    expect((await prisma.product.findUniqueOrThrow({where:{id:productId}})).sellingPrice.toFixed(2)).toBe("600.00");
+    const refund = {sourceType:ReturnSourceType.SALE,sourceId:saleId,reason:"Security regression",idempotencyKey:key,items:[{originalLineId:saleLineId,quantity:"1",physicallyReturned:false,restockQuantity:"0"}]};
+    await expect(processReturn({...cashier,role:Role.WAREHOUSE_STAFF},refund)).rejects.toMatchObject({code:"UNAUTHORIZED_ACTION"});
+    await expect(processReturn(cashier,refund)).rejects.toMatchObject({code:"UNUSUAL_REFUND_REQUIRES_ADMIN"});
+    expect(await prisma.returnRecord.count({where:{idempotencyKey:key}})).toBe(0);
+    expect((await stock()).onHand.toString()).toBe(beforeStock);
+    expect((await payment()).refundedAmount.toFixed(2)).toBe(beforePayment);
+  });
+
   it("returns one unit atomically: restock +1, refund Rs 600, loyalty reverses correctly", async () => {
     const result = await processReturn(cashier, {
       sourceType: ReturnSourceType.SALE,
