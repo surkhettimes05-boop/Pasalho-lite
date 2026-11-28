@@ -11,9 +11,11 @@ const baseEnvSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
   APP_URL: z.string().url().default("http://localhost:3000"),
-  MODERN_PRICING_API_URL: z.string().url().optional(),
-  MODERN_PRICING_SERVICE_TOKEN: z.string().min(32).optional(),
-  MODERN_PRICING_STORE_REFERENCE: z.string().uuid().optional(),
+  // Legacy member-pricing integration settings are optional. The in-store
+  // regular-price path and offline provisioning use Lite's own database.
+  MODERN_PRICING_API_URL: z.string().optional(),
+  MODERN_PRICING_SERVICE_TOKEN: z.string().optional(),
+  MODERN_PRICING_STORE_REFERENCE: z.string().optional(),
   SESSION_TTL_HOURS: z.coerce.number().int().positive().max(168).default(12),
   LOYALTY_EARN_ENABLED: booleanStringFlag,
   LOYALTY_REDEMPTION_ENABLED: z.preprocess(
@@ -45,32 +47,6 @@ export function parseEnv(input: Record<string, string | undefined>) {
       );
     }
 
-    if (
-      !parsed.MODERN_PRICING_API_URL ||
-      !parsed.MODERN_PRICING_SERVICE_TOKEN ||
-      !parsed.MODERN_PRICING_STORE_REFERENCE
-    ) {
-      throw new Error(
-        "Production requires the authoritative member pricing service configuration.",
-      );
-    }
-
-    const pricingUrl = new URL(parsed.MODERN_PRICING_API_URL);
-    if (pricingUrl.protocol !== "https:" || pricingUrl.pathname !== "/") {
-      throw new Error(
-        "Production member pricing API URL must be an HTTPS origin.",
-      );
-    }
-
-    if (
-      /replace|changeme|example|secret/i.test(
-        parsed.MODERN_PRICING_SERVICE_TOKEN,
-      )
-    ) {
-      throw new Error(
-        "Production member pricing service token must be a unique random value.",
-      );
-    }
   }
 
   return parsed;

@@ -43,7 +43,7 @@ async function postOfflineSale(
   const total = new Prisma.Decimal(sale.subtotalCents).div(100);
   const newSale = await tx.sale.create({ data: {
     id: sale.transactionId, receiptNumber: sale.receiptNumber, storeLocationId: snapshot.storeId,
-    customerId: null, pricingQuoteSnapshot: { offlineSnapshotId: snapshot.id, terminalId: snapshot.terminalId, priceAuthority: "MODERN_CATALOG_REGULAR", taxPolicy: snapshot.taxPolicy, localCreatedAt: sale.createdAt, ...(resolved ? { ownerResolved: true } : {}) },
+    customerId: null, pricingQuoteSnapshot: { offlineSnapshotId: snapshot.id, terminalId: snapshot.terminalId, priceAuthority: "LITE_CATALOG_REGULAR", taxPolicy: snapshot.taxPolicy, localCreatedAt: sale.createdAt, ...(resolved ? { ownerResolved: true } : {}) },
     status: SaleStatus.FINALIZED, subtotal: total, discountTotal: new Prisma.Decimal(0), total,
     paymentStatus: PaymentStatus.PAID, finalizedAt: new Date(sale.createdAt), finalizedByUserId: cashierId,
     idempotencyKey: `offline:${sale.transactionId}`,

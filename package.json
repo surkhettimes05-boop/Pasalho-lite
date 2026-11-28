@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:isolated": "node scripts/test-isolated.mjs",
+    "test:catalog-capacity": "node scripts/test-isolated.mjs --capacity",
     "test:e2e:offline": "playwright test e2e/offline-pos.spec.ts",
     "test:e2e:offline-http": "node scripts/offline-http-e2e.mjs",
     "test:watch": "vitest",

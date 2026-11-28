@@ -13,6 +13,11 @@ import type {
   PricingCatalog,
   PricingQuotePayload,
 } from "@/modules/pricing/pricing.schemas";
+import {
+  getLiteRegularPriceCatalog,
+  quoteLitePosPricing,
+  validateLitePosPricingQuote,
+} from "@/modules/pricing/lite-pricing.service";
 import { z } from "zod";
 
 const posPricingFields = z.object({
@@ -98,16 +103,10 @@ function storeReference() {
   return reference;
 }
 
-// The catalog is the Modern Trade authority for regular POS prices. Offline
-// snapshots never use Lite's operational sellingPrice field.
+// Offline provisioning uses the Lite product and price records as its source
+// of truth. Snapshot prices are still explicitly reviewed by an owner below.
 export async function getOfflineRegularPriceCatalog(actor: SessionUser) {
-  assertRole(actor.role, [Role.OWNER_ADMIN]);
-  const reference = storeReference();
-  const catalog = await callPricingService(() => getClient().getCatalog(reference));
-  if (catalog.storeReference !== reference) {
-    throw new BusinessError("PRICING_RESPONSE_MISMATCH", "Catalog store mismatch.");
-  }
-  return catalog;
+  return getLiteRegularPriceCatalog(actor);
 }
 
 function modernPhoneReference(phoneNormalized: string) {
@@ -240,19 +239,7 @@ async function callPricingService<T>(operation: () => Promise<T>): Promise<T> {
 export async function quotePosPricing(actor: SessionUser, rawInput: unknown) {
   assertRole(actor.role, [Role.OWNER_ADMIN, Role.CASHIER_STORE]);
   const parsed = posPricingInputSchema.parse(rawInput);
-  const context = await loadPosPricingContext(parsed);
-  const client = getClient();
-  const issued = await callPricingService(() =>
-    client.createQuote({
-      channel: "POS",
-      storeReference: context.storeReference,
-      customerReference: context.customerReference,
-      customerPhoneReference: context.customerPhoneReference,
-      items: context.items.map(({ sku, quantity }) => ({ sku, quantity })),
-    }),
-  );
-  assertQuoteMatchesCart(issued, context);
-  return issued;
+  return quoteLitePosPricing(actor, parsed);
 }
 
 export async function validatePosPricingQuote(
@@ -261,21 +248,10 @@ export async function validatePosPricingQuote(
 ): Promise<PricingQuotePayload> {
   assertRole(actor.role, [Role.OWNER_ADMIN, Role.CASHIER_STORE]);
   const parsed = validatePricingInputSchema.parse(rawInput);
-  const context = await loadPosPricingContext(parsed);
-  const client = getClient();
-  const quote = await callPricingService(() =>
-    client.validateQuote({
-      channel: "POS",
-      storeReference: context.storeReference,
-      customerReference: context.customerReference,
-      customerPhoneReference: context.customerPhoneReference,
-      items: context.items.map(({ sku, quantity }) => ({ sku, quantity })),
-      saleReference: parsed.idempotencyKey,
-      signedQuoteToken: parsed.signedQuoteToken,
-    }),
-  );
-  assertQuoteMatchesCart(quote, context);
-  return quote;
+  if (!parsed.signedQuoteToken.startsWith("lite1.")) {
+    throw new BusinessError("QUOTE_INVALID", "POS accepts only signed Lite price quotes.");
+  }
+  return validateLitePosPricingQuote(actor, parsed);
 }
 
 export async function quoteCustomerOrderPricing(
@@ -322,7 +298,6 @@ export async function getPosMembershipSnapshot(
     where: { id: parsedCustomerId },
     select: {
       id: true,
-      phoneNormalized: true,
       membershipIdentityId: true,
       active: true,
     },
@@ -333,32 +308,12 @@ export async function getPosMembershipSnapshot(
       "Selected customer is unavailable.",
     );
   }
-  const membershipIdentityId = customer.membershipIdentityId;
-  if (!membershipIdentityId) {
-    return {
-      membershipNumber: null,
-      membershipTier: null,
-      membershipStatus: "NOT_MEMBER" as const,
-    };
-  }
-
-  const verified = await callPricingService(() =>
-    getClient().verifyCustomer({
-      customerReference: membershipIdentityId,
-      customerPhoneReference: modernPhoneReference(customer.phoneNormalized),
-      storeReference: storeReference(),
-    }),
-  );
-  if (verified.customerReference !== membershipIdentityId) {
-    throw new BusinessError(
-      "MEMBERSHIP_IDENTITY_MISMATCH",
-      "The pricing service verified a different customer identity.",
-    );
-  }
   return {
-    membershipNumber: verified.membershipNumber,
-    membershipTier: verified.membershipTier,
-    membershipStatus: verified.membershipStatus,
+    membershipNumber: null,
+    membershipTier: null,
+    membershipStatus: customer.membershipIdentityId
+      ? "EXTERNAL_UNVERIFIED" as const
+      : "NOT_MEMBER" as const,
   };
 }
 

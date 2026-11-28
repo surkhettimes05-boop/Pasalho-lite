@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   InventoryMovementType,
   PaymentMethod,
@@ -22,8 +22,6 @@ import { finalizeSale } from "@/modules/pos/pos.service";
 import { createProduct, updateProduct } from "@/modules/products/product.service";
 import { postPurchaseReceipt } from "@/modules/receiving/receipt.service";
 import { createSupplier } from "@/modules/receiving/supplier.service";
-import { installModernPricingMock } from "./helpers/modern-pricing-mock";
-import type { ModernPricingMockCleanup } from "./helpers/modern-pricing-mock";
 import {
   createTransfer,
   dispatchTransfer,
@@ -40,10 +38,8 @@ let warehouseActor: SessionUser;
 let productId: string;
 let storeId: string;
 let primarySaleId: string;
-let restorePricingMock: ModernPricingMockCleanup | undefined;
 
 beforeAll(async () => {
-  restorePricingMock = installModernPricingMock();
   const ownerRecord = await prisma.user.findUniqueOrThrow({
     where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
   });
@@ -131,8 +127,6 @@ beforeAll(async () => {
     ],
   });
 });
-
-afterAll(() => restorePricingMock?.());
 
 async function storeBalance() {
   return prisma.stockBalance.findUniqueOrThrow({
@@ -286,16 +280,15 @@ describe("Phase 4 POS", () => {
     ).toBe(1);
   });
 
-  it("persists authoritative member prices, promotion, and quote snapshots", async () => {
+  it("prices an identified customer from Lite without external membership verification", async () => {
     const customer = await createCustomer(cashier, {
       phone: `96${suffix.replace(/\D/g, "").padEnd(8, "6").slice(0, 8)}`,
       name: "Pricing Quote Member",
       notes: "",
     });
-    const membershipIdentityId = randomUUID();
     await prisma.customer.update({
       where: { id: customer.id },
-      data: { membershipIdentityId },
+      data: { membershipIdentityId: randomUUID() },
     });
 
     const result = await finalizeSale(cashier, {
@@ -306,28 +299,26 @@ describe("Phase 4 POS", () => {
     });
 
     expect(result.sale.subtotal.toFixed(2)).toBe("100.00");
-    expect(result.sale.discountTotal.toFixed(2)).toBe("5.00");
-    expect(result.sale.total.toFixed(2)).toBe("95.00");
+    expect(result.sale.discountTotal.toFixed(2)).toBe("0.00");
+    expect(result.sale.total.toFixed(2)).toBe("100.00");
     expect(result.sale.pricingQuoteId).toBeTruthy();
     expect(result.sale.pricingRuleVersion).toBe(1);
     expect(result.sale.currency).toBe("NPR");
-    expect(result.sale.membershipTierSnapshot).toBe("REGISTERED_MEMBER");
-    expect(result.sale.membershipStatusSnapshot).toBe("ACTIVE");
-    expect(result.sale.membershipNumberSnapshot).toBe(1);
+    expect(result.sale.membershipTierSnapshot).toBeNull();
+    expect(result.sale.membershipStatusSnapshot).toBe("EXTERNAL_UNVERIFIED");
+    expect(result.sale.membershipNumberSnapshot).toBeNull();
     expect(result.sale.pricingQuoteSnapshot).toMatchObject({
-      customerReference: membershipIdentityId,
-      membershipNumber: 1,
-      discountTotal: "5.00",
-      finalTotal: "95.00",
+      customerReference: customer.id,
+      membershipNumber: null,
+      discountTotal: "0.00",
+      finalTotal: "100.00",
     });
     expect(result.sale.items[0].regularUnitPrice?.toFixed(2)).toBe("100.00");
-    expect(result.sale.items[0].appliedUnitPrice?.toFixed(2)).toBe("95.00");
-    expect(result.sale.items[0].discountAmount.toFixed(2)).toBe("5.00");
+    expect(result.sale.items[0].appliedUnitPrice?.toFixed(2)).toBe("100.00");
+    expect(result.sale.items[0].discountAmount.toFixed(2)).toBe("0.00");
     expect(result.sale.items[0].lineTotal.toFixed(2)).toBe("100.00");
-    expect(result.sale.items[0].promotionSnapshot).toMatchObject({
-      name: "Test member promotion",
-    });
-    expect(result.payment.amount.toFixed(2)).toBe("95.00");
+    expect(result.sale.items[0].promotionSnapshot).toBeNull();
+    expect(result.payment.amount.toFixed(2)).toBe("100.00");
     expect((await storeBalance()).onHand.toString()).toBe("16");
   });
 
@@ -348,7 +339,7 @@ describe("Phase 4 POS", () => {
     await adjustInventory(owner, { productId, locationId: storeId, direction: "IN", quantity: "1", reason: "Restore isolated unverified creator test stock", idempotencyKey: `phase4-unverified-creator-restore-${suffix}` });
   });
 
-  it("uses authoritative founding tier and excludes suspended members", async () => {
+  it("applies regular Lite price to external identities without calling Modern Trade", async () => {
     const founding = await createCustomer(cashier, {
       phone: `91${suffix.replace(/\D/g, "").padEnd(8, "1").slice(0, 8)}`,
       name: "Founding Pricing Member",
@@ -359,25 +350,21 @@ describe("Phase 4 POS", () => {
       where: { id: founding.id },
       data: { membershipIdentityId: foundingIdentity },
     });
-    restorePricingMock?.setMembershipProfile(foundingIdentity, {
-      membershipNumber: 1000,
-      membershipTier: "FOUNDING_1000",
-      membershipStatus: "ACTIVE",
-    });
     expect(await getPosMembershipSnapshot(cashier, founding.id)).toMatchObject({
-      membershipNumber: 1000,
-      membershipTier: "FOUNDING_1000",
-      membershipStatus: "ACTIVE",
+      membershipNumber: null,
+      membershipTier: null,
+      membershipStatus: "EXTERNAL_UNVERIFIED",
     });
 
     const foundingQuote = await quotePosPricing(cashier, {
       customerId: founding.id,
       items: [{ productId, quantity: "1.25" }],
     });
-    expect(foundingQuote.membershipNumber).toBe(1000);
-    expect(foundingQuote.membershipTier).toBe("FOUNDING_1000");
-    expect(foundingQuote.items[0].lineDiscount).toBe("6.25");
-    expect(foundingQuote.items[0].lineTotal).toBe("118.75");
+    expect(foundingQuote.membershipNumber).toBeNull();
+    expect(foundingQuote.membershipTier).toBeNull();
+    expect(foundingQuote.membershipStatus).toBe("EXTERNAL_UNVERIFIED");
+    expect(foundingQuote.items[0].lineDiscount).toBe("0.00");
+    expect(foundingQuote.items[0].lineTotal).toBe("125.00");
 
     const suspended = await createCustomer(cashier, {
       phone: `92${suffix.replace(/\D/g, "").padEnd(8, "2").slice(0, 8)}`,
@@ -389,17 +376,11 @@ describe("Phase 4 POS", () => {
       where: { id: suspended.id },
       data: { membershipIdentityId: suspendedIdentity },
     });
-    restorePricingMock?.setMembershipProfile(suspendedIdentity, {
-      membershipNumber: 52,
-      membershipTier: "REGISTERED_MEMBER",
-      membershipStatus: "SUSPENDED",
-    });
-
     const suspendedQuote = await quotePosPricing(cashier, {
       customerId: suspended.id,
       items: [{ productId, quantity: "1" }],
     });
-    expect(suspendedQuote.membershipStatus).toBe("SUSPENDED");
+    expect(suspendedQuote.membershipStatus).toBe("EXTERNAL_UNVERIFIED");
     expect(suspendedQuote.items[0].appliedUnitPrice).toBe("100.00");
     expect(suspendedQuote.discountTotal).toBe("0.00");
   });

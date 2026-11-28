@@ -130,6 +130,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Import 3,000 products and stress POS search at 10,000
+        run: npm run test:catalog-capacity
+
       - name: Prove backup and restore
         shell: bash
         run: |
