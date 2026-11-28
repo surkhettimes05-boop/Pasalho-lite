@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "phase-*"
+      - feature/standalone-supermarket-pos
       - feature/windows-sqlite-pos
   pull_request:
 
