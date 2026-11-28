@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   PaymentMethod,
   PaymentSourceType,
@@ -21,8 +21,6 @@ import { reconcileLoyaltyAccount } from "@/modules/loyalty/loyalty.service";
 import { finalizeSale } from "@/modules/pos/pos.service";
 import { createProduct } from "@/modules/products/product.service";
 import { processReturn } from "@/modules/returns/return.service";
-import { installModernPricingMock } from "./helpers/modern-pricing-mock";
-import type { ModernPricingMockCleanup } from "./helpers/modern-pricing-mock";
 import { updateProduct } from "@/modules/products/product.service";
 
 const suffix = randomUUID().slice(0, 8);
@@ -36,10 +34,8 @@ let storeId: string;
 let saleId: string;
 let saleLineId: string;
 let firstReturnId: string;
-let restorePricingMock: ModernPricingMockCleanup | undefined;
 
 beforeAll(async () => {
-  restorePricingMock = installModernPricingMock();
   const user = await prisma.user.findUniqueOrThrow({
     where: { email: process.env.SEED_OWNER_EMAIL!.toLowerCase() },
   });
@@ -76,7 +72,6 @@ beforeAll(async () => {
   ).id;
   const identityId = randomUUID();
   await prisma.customer.update({ where: { id: customerId }, data: { membershipIdentityId: identityId } });
-  restorePricingMock?.setMembershipProfile(identityId, { membershipNumber: 41, membershipTier: "REGISTERED_MEMBER", membershipStatus: "SUSPENDED" });
 
   await adjustInventory(owner, {
     productId,
@@ -97,7 +92,6 @@ beforeAll(async () => {
   saleId = sale.sale.id;
   saleLineId = sale.sale.items[0].id;
 });
-
 async function stock() {
   return prisma.stockBalance.findUniqueOrThrow({
     where: {
@@ -370,7 +364,7 @@ describe("Phase 7 POS returns and refunds", () => {
     ).rejects.toThrow();
   });
 
-  it("refunds partial and full member returns at the original applied price", async () => {
+  it("refunds partial and full linked-customer returns at the original Lite price", async () => {
     const member = await createCustomer(cashier, {
       phone: `97${digits}`,
       name: "Discounted Return Member",
@@ -381,22 +375,16 @@ describe("Phase 7 POS returns and refunds", () => {
       where: { id: member.id },
       data: { membershipIdentityId },
     });
-    restorePricingMock?.setMembershipProfile(membershipIdentityId, {
-      membershipNumber: 23,
-      membershipTier: "REGISTERED_MEMBER",
-      membershipStatus: "ACTIVE",
-    });
-
     const sale = await finalizeSale(cashier, {
-      idempotencyKey: `p7-discounted-sale-${suffix}`,
+      idempotencyKey: `p7-lite-price-sale-${suffix}`,
       paymentMethod: PaymentMethod.CASH,
       customerId: member.id,
       items: [{ productId, quantity: "2" }],
     });
     const line = sale.sale.items[0];
-    expect(line.appliedUnitPrice?.toFixed(2)).toBe("595.00");
-    expect(line.discountAmount.toFixed(2)).toBe("10.00");
-    expect(sale.payment.amount.toFixed(2)).toBe("1190.00");
+    expect(line.appliedUnitPrice?.toFixed(2)).toBe("600.00");
+    expect(line.discountAmount.toFixed(2)).toBe("0.00");
+    expect(sale.payment.amount.toFixed(2)).toBe("1200.00");
 
     const currentProduct = await prisma.product.findUniqueOrThrow({
       where: { id: productId },
@@ -418,8 +406,8 @@ describe("Phase 7 POS returns and refunds", () => {
     const partial = await processReturn(cashier, {
       sourceType: ReturnSourceType.SALE,
       sourceId: sale.sale.id,
-      reason: "One discounted unit returned",
-      idempotencyKey: `p7-discounted-return-one-${suffix}`,
+      reason: "One Lite-priced unit returned",
+      idempotencyKey: `p7-lite-price-return-one-${suffix}`,
       items: [
         {
           originalLineId: line.id,
@@ -429,13 +417,13 @@ describe("Phase 7 POS returns and refunds", () => {
         },
       ],
     });
-    expect(partial.refundAmount.toFixed(2)).toBe("595.00");
+    expect(partial.refundAmount.toFixed(2)).toBe("600.00");
 
     const finalReturn = await processReturn(cashier, {
       sourceType: ReturnSourceType.SALE,
       sourceId: sale.sale.id,
-      reason: "Final discounted unit returned",
-      idempotencyKey: `p7-discounted-return-two-${suffix}`,
+      reason: "Final Lite-priced unit returned",
+      idempotencyKey: `p7-lite-price-return-two-${suffix}`,
       items: [
         {
           originalLineId: line.id,
@@ -445,7 +433,7 @@ describe("Phase 7 POS returns and refunds", () => {
         },
       ],
     });
-    expect(finalReturn.refundAmount.toFixed(2)).toBe("595.00");
+    expect(finalReturn.refundAmount.toFixed(2)).toBe("600.00");
     expect(
       (
         await prisma.payment.findUniqueOrThrow({
@@ -457,8 +445,6 @@ describe("Phase 7 POS returns and refunds", () => {
           },
         })
       ).refundedAmount.toFixed(2),
-    ).toBe("1190.00");
+    ).toBe("1200.00");
   });
 });
-
-afterAll(() => restorePricingMock?.());
