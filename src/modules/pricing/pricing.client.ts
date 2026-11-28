@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   issuedPricingQuoteSchema,
   pricingCatalogSchema,
@@ -11,6 +12,11 @@ export class PricingServiceClientError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    readonly diagnostics?: {
+      requestId: string;
+      upstreamStatus?: number;
+      durationMs: number;
+    },
   ) {
     super(message);
     this.name = "PricingServiceClientError";
@@ -22,6 +28,7 @@ export type PricingServiceConfig = {
   serviceToken: string;
   production: boolean;
   requestTimeoutMs?: number;
+  requestId?: string;
 };
 
 export class MemberPricingClient {
@@ -51,13 +58,15 @@ export class MemberPricingClient {
         "The pricing service must use HTTPS in production.",
       );
     }
-    this.timeoutMs = config.requestTimeoutMs ?? 5_000;
+    this.timeoutMs = config.requestTimeoutMs ?? 70_000;
   }
 
   private async request(
     path: string,
     init: RequestInit = {},
   ): Promise<unknown> {
+    const requestId = this.config.requestId ?? randomUUID();
+    const startedAt = Date.now();
     let response: Response;
     try {
       response = await this.fetcher(new URL(path, this.baseUrl), {
@@ -65,15 +74,50 @@ export class MemberPricingClient {
         cache: "no-store",
         signal: AbortSignal.timeout(this.timeoutMs),
         headers: {
+          "x-request-id": requestId,
           authorization: `Bearer ${this.config.serviceToken}`,
           ...(init.body ? { "content-type": "application/json" } : {}),
           ...init.headers,
         },
       });
-    } catch {
+    } catch (error) {
+      const durationMs = Date.now() - startedAt;
+      const timedOut =
+        error instanceof Error &&
+        (error.name === "TimeoutError" || error.name === "AbortError");
+      const code = timedOut
+        ? "PRICING_SERVICE_TIMEOUT"
+        : "PRICING_SERVICE_CONNECTION_FAILED";
+      const networkErrorName =
+        error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,40}$/.test(error.name)
+          ? error.name
+          : "UnknownError";
+      const rawNetworkCode =
+        error && typeof error === "object" && "code" in error
+          ? (error as { code?: unknown }).code
+          : undefined;
+      const networkErrorCode =
+        typeof rawNetworkCode === "string" &&
+        /^[A-Z0-9_]{1,40}$/.test(rawNetworkCode)
+          ? rawNetworkCode
+          : undefined;
+      console.error(
+        JSON.stringify({
+          event: "pricing_upstream_failure",
+          requestId,
+          operation: path.split("?")[0],
+          errorCategory: code,
+          networkErrorName,
+          ...(networkErrorCode ? { networkErrorCode } : {}),
+          durationMs,
+        }),
+      );
       throw new PricingServiceClientError(
-        "PRICING_SERVICE_UNAVAILABLE",
-        "The authoritative pricing service could not be reached.",
+        code,
+        timedOut
+          ? "The authoritative pricing service did not respond before the request timed out."
+          : "The authoritative pricing service could not be reached.",
+        { requestId, durationMs },
       );
     }
 
@@ -81,9 +125,24 @@ export class MemberPricingClient {
     try {
       body = await response.json();
     } catch {
+      const durationMs = Date.now() - startedAt;
+      const code = !response.ok && response.status >= 500
+        ? "PRICING_SERVICE_UNAVAILABLE"
+        : "PRICING_RESPONSE_INVALID";
+      console.error(
+        JSON.stringify({
+          event: "pricing_upstream_failure",
+          requestId,
+          operation: path.split("?")[0],
+          upstreamStatus: response.status,
+          errorCategory: code,
+          durationMs,
+        }),
+      );
       throw new PricingServiceClientError(
-        "PRICING_RESPONSE_INVALID",
+        code,
         "The authoritative pricing service returned an invalid response.",
+        { requestId, upstreamStatus: response.status, durationMs },
       );
     }
 
@@ -92,21 +151,61 @@ export class MemberPricingClient {
         body && typeof body === "object"
           ? (body as { code?: unknown }).code
           : undefined;
+      const upstreamCode =
+        typeof error === "string" && /^[A-Z][A-Z0-9_]{1,64}$/.test(error)
+          ? error
+          : "PRICING_REQUEST_REJECTED";
       if (response.status === 401 || response.status === 403) {
+        const durationMs = Date.now() - startedAt;
+        console.error(
+          JSON.stringify({
+            event: "pricing_upstream_failure",
+            requestId,
+            operation: path.split("?")[0],
+            upstreamStatus: response.status,
+            errorCategory: "PRICING_SERVICE_AUTH_FAILED",
+            durationMs,
+          }),
+        );
         throw new PricingServiceClientError(
           "PRICING_SERVICE_AUTH_FAILED",
           "The authoritative pricing service rejected service authentication.",
+          { requestId, upstreamStatus: response.status, durationMs },
         );
       }
       if (response.status >= 500) {
+        const durationMs = Date.now() - startedAt;
+        console.error(
+          JSON.stringify({
+            event: "pricing_upstream_failure",
+            requestId,
+            operation: path.split("?")[0],
+            upstreamStatus: response.status,
+            errorCategory: "PRICING_SERVICE_UNAVAILABLE",
+            durationMs,
+          }),
+        );
         throw new PricingServiceClientError(
           "PRICING_SERVICE_UNAVAILABLE",
           "The authoritative pricing service could not complete the request.",
+          { requestId, upstreamStatus: response.status, durationMs },
         );
       }
+      const durationMs = Date.now() - startedAt;
+      console.error(
+        JSON.stringify({
+          event: "pricing_upstream_failure",
+          requestId,
+          operation: path.split("?")[0],
+          upstreamStatus: response.status,
+          errorCategory: upstreamCode,
+          durationMs,
+        }),
+      );
       throw new PricingServiceClientError(
-        typeof error === "string" ? error : "PRICING_REQUEST_REJECTED",
+        upstreamCode,
         "The authoritative pricing service rejected the request.",
+        { requestId, upstreamStatus: response.status, durationMs },
       );
     }
     return body;

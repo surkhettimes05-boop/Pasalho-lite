@@ -24,6 +24,9 @@ const errors: Record<string, string> = {
   UNAUTHORIZED_ACTION: "Your role cannot finalize POS sales.",
   POS_OPERATION_FAILED: "The POS sale could not be completed.",
   PRICING_SERVICE_UNAVAILABLE: "The authoritative pricing service is unavailable. No sale was finalized.",
+  PRICING_SERVICE_TIMEOUT: "The pricing service took too long to respond. Please retry the price quote.",
+  PRICING_SERVICE_CONNECTION_FAILED: "The pricing service could not be reached. Please retry the price quote.",
+  PRICING_RESPONSE_INVALID: "Pricing returned an unreadable response. Please retry the price quote.",
   PRICING_SERVICE_NOT_CONFIGURED: "The authoritative pricing service is not configured.",
   QUOTE_EXPIRED: "The price quote expired. Request a new quote.",
   QUOTE_MISMATCH: "The price quote no longer matches this cart or customer.",
@@ -38,6 +41,7 @@ const errors: Record<string, string> = {
 };
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 90;
 
 export default async function PosPage({
   searchParams,

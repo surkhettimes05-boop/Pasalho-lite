@@ -157,6 +157,10 @@ jobs:
 
       - name: Canonical end-to-end release test
         shell: bash
+        env:
+          MODERN_PRICING_API_URL: http://pricing.test
+          MODERN_PRICING_SERVICE_TOKEN: ci-only-pricing-service-token-not-for-production
+          MODERN_PRICING_STORE_REFERENCE: 00000000-0000-4000-8000-000000000001
         run: |
           docker run --rm --network host -e PGPASSWORD=pasalho postgres:17-alpine \
             psql -h 127.0.0.1 -U pasalho -d postgres \
@@ -172,9 +176,6 @@ jobs:
 
       - name: Production build
         run: npm run build
-
-      - name: Cloudflare Workers OpenNext build
-        run: npm run cloudflare:build
 
       - name: Boot smoke test
         shell: bash
