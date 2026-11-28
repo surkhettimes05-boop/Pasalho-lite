@@ -258,3 +258,42 @@ claiming recovery from device loss. Installed updates must preserve the local
 data directory. No automatic update or payout behavior is authorized.
 
 Status: APPROVED for scoped implementation by the final store launch assignment on 2026-11-24
+
+## D-024 Local pilot database binding
+
+The Windows-local acceptance application must start only through
+`scripts/start-pasalho-pilot.ps1`. It pins the app to the isolated loopback
+PostgreSQL target `127.0.0.1:55432/pasalho_pilot_acceptance`, schema `public`,
+with `APP_ENV=test`. A read-only preflight must verify the effective server,
+database, and schema before Next.js starts. The launcher must reject a
+different inherited database target and an occupied web port. It must not
+start PostgreSQL, run migrations, seed data, or modify the pilot records.
+
+Local authentication secrets belong in ignored `.env.pilot.local`; no database
+password or authentication secret may be committed. `.env` and `.env.test`
+remain separate development and test targets.
+
+Status: APPROVED for local pilot stabilization on 2026-11-28
+
+## D-025 PostgreSQL transaction query serialization
+
+PostgreSQL interactive transactions use one client connection. Application
+queries issued through that transaction client must be awaited sequentially.
+Independent reads through the root Prisma client may remain parallel because
+the PostgreSQL pool can assign separate clients.
+
+Prisma `relationJoins` is currently a Preview dependency used to make nested
+relation reads execute as a database join instead of overlapping queries on a
+transaction-bound client. It does not change business values, but it changes
+query plans and remains subject to Preview behavior and Prisma upgrade changes.
+Keep the explicit daily-close transaction reads sequential and keep preview
+callers on the minimum relation projection they need.
+
+A future stable replacement may hydrate relation-rich command results after
+commit using the independent pool, or explicitly serialize relation reads
+inside the transaction. Do not remove `relationJoins` until all affected sale,
+COD, transfer, return, offline, inventory, report, and daily-close paths pass
+the complete traced regression suite without the warning.
+
+Status: APPROVED for the isolated development branch; Preview dependency must
+be reviewed before production release

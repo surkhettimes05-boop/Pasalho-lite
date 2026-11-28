@@ -455,6 +455,29 @@ beforeAll(async () => {
 });
 
 describe("Phase 9 dashboard and reports", () => {
+  it("does not overlap PostgreSQL queries in dashboard transaction reads", async () => {
+    const deprecations: Error[] = [];
+    const collectDeprecation = (warning: Error) => {
+      if (warning.name === "DeprecationWarning") deprecations.push(warning);
+    };
+
+    process.on("warning", collectDeprecation);
+    try {
+      await getDashboardReport(Role.OWNER_ADMIN, dateKey);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(
+        deprecations.filter((warning) =>
+          warning.message.includes(
+            "Calling client.query() when the client is already executing a query",
+          ),
+        ),
+      ).toEqual([]);
+    } finally {
+      process.off("warning", collectDeprecation);
+    }
+  });
+
   it("reconciles dashboard sales, payment, refund, expense and expected-cash totals", async () => {
     const dashboard = await getDashboardReport(Role.OWNER_ADMIN, dateKey);
 
