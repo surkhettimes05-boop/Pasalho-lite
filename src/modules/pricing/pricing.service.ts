@@ -62,7 +62,7 @@ const validatePricingInputSchema = posPricingFields
   .strict()
   .superRefine(validateUniqueProducts);
 
-function getClient() {
+function getClient(requestId?: string) {
   if (
     !env.MODERN_PRICING_API_URL ||
     !env.MODERN_PRICING_SERVICE_TOKEN ||
@@ -78,6 +78,7 @@ function getClient() {
       apiUrl: env.MODERN_PRICING_API_URL,
       serviceToken: env.MODERN_PRICING_SERVICE_TOKEN,
       production: env.APP_ENV === "production",
+      requestId,
     });
   } catch (error) {
     if (error instanceof PricingServiceClientError) {
@@ -225,11 +226,15 @@ async function callPricingService<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function quotePosPricing(actor: SessionUser, rawInput: unknown) {
+export async function quotePosPricing(
+  actor: SessionUser,
+  rawInput: unknown,
+  requestId?: string,
+) {
   assertRole(actor.role, [Role.OWNER_ADMIN, Role.CASHIER_STORE]);
   const parsed = posPricingInputSchema.parse(rawInput);
   const context = await loadPosPricingContext(parsed);
-  const client = getClient();
+  const client = getClient(requestId);
   const issued = await callPricingService(() =>
     client.createQuote({
       channel: "POS",

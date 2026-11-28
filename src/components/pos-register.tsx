@@ -37,7 +37,7 @@ type CartLine = {
 
 type QuoteActionResult =
   | { ok: true; quote: IssuedPricingQuote }
-  | { ok: false; code: string };
+  | { ok: false; code: string; supportReference?: string };
 
 function normalized(value: string) {
   return value.trim().toLowerCase();
@@ -91,6 +91,8 @@ export function PosRegister({
     null,
   );
   const [pricingMessage, setPricingMessage] = useState("");
+  const [pricingSupportReference, setPricingSupportReference] =
+    useState<string | null>(null);
   const [quoteRevision, setQuoteRevision] = useState(0);
 
   const productById = useMemo(
@@ -140,6 +142,8 @@ export function PosRegister({
     const timer = setTimeout(() => {
       startTransition(async () => {
         setPricingBusy(true);
+        setPricingMessage("");
+        setPricingSupportReference(null);
         try {
           const result = await quotePricing({
             customerId: selectedCustomer?.id ?? null,
@@ -148,6 +152,7 @@ export function PosRegister({
           if (cancelled) return;
           if (!result.ok) {
             setPricingMessage(result.code);
+            setPricingSupportReference(result.supportReference ?? null);
             return;
           }
           if (Date.parse(result.quote.expiresAt) <= Date.now()) {
@@ -156,6 +161,8 @@ export function PosRegister({
           }
 
           setPricingQuote(result.quote);
+          setPricingMessage("");
+          setPricingSupportReference(null);
           setSelectedCustomer((current) => {
             if (!current) return current;
             if (
@@ -173,7 +180,10 @@ export function PosRegister({
             };
           });
         } catch {
-          if (!cancelled) setPricingMessage("PRICING_SERVICE_UNAVAILABLE");
+          if (!cancelled) {
+            setPricingMessage("PRICING_SERVICE_CONNECTION_FAILED");
+            setPricingSupportReference(null);
+          }
         } finally {
           if (!cancelled) setPricingBusy(false);
         }
@@ -628,7 +638,17 @@ export function PosRegister({
             </div>
             {pricingMessage ? (
               <p className="error-message" role="alert">
-                Pricing quote failed ({pricingMessage}). No local price will be used.
+                {pricingMessage === "PRICING_SERVICE_TIMEOUT"
+                  ? "Pricing is taking longer than usual. Retry the quote before checkout."
+                  : pricingMessage === "PRICING_SERVICE_CONNECTION_FAILED" ||
+                      pricingMessage === "PRICING_SERVICE_UNAVAILABLE"
+                    ? "Could not reach the pricing service. Retry the quote before checkout."
+                    : pricingMessage === "PRICING_SERVICE_AUTH_FAILED"
+                      ? "Pricing could not be verified. Ask a manager for help."
+                      : "The cart could not be priced. Check the products and retry."}
+                {pricingSupportReference
+                  ? ` Support reference: ${pricingSupportReference}.`
+                  : " No local price will be used."}
               </p>
             ) : null}
             <button
@@ -637,7 +657,11 @@ export function PosRegister({
               onClick={handlePricingQuote}
               disabled={pricingBusy}
             >
-              {pricingBusy ? "Requesting price..." : "Refresh authoritative price"}
+              {pricingBusy
+                ? "Requesting price..."
+                : pricingMessage
+                  ? "Retry price quote"
+                  : "Refresh authoritative price"}
             </button>
 
             <fieldset className="payment-methods">

@@ -62,6 +62,7 @@ describe("Modern member pricing client", () => {
     expect(request?.headers.get("authorization")).toBe(
       `Bearer ${config.serviceToken}`,
     );
+    expect(request?.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/i);
     expect(request?.url).toBe(
       "https://pricing.example.test/api/internal/member-pricing/quotes",
     );
@@ -92,7 +93,7 @@ describe("Modern member pricing client", () => {
     expect(result.channel).toBe("COD");
   });
 
-  it("requires HTTPS for production and fails explicitly when the API is unavailable", async () => {
+  it("requires HTTPS for production and classifies connection failures", async () => {
     expect(
       () =>
         new MemberPricingClient({
@@ -112,7 +113,78 @@ describe("Modern member pricing client", () => {
         customerPhoneReference: null,
         items: [{ sku: "CLIENT-01", quantity: "1" }],
       }),
-    ).rejects.toMatchObject({ code: "PRICING_SERVICE_UNAVAILABLE" });
+    ).rejects.toMatchObject({ code: "PRICING_SERVICE_CONNECTION_FAILED" });
+  });
+
+  it("reports timeout separately with a correlation reference", async () => {
+    const client = new MemberPricingClient(
+      { ...config, requestTimeoutMs: 5 },
+      async (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(init.signal?.reason),
+            { once: true },
+          );
+        }),
+    );
+    await expect(
+      client.createQuote({
+        channel: "POS",
+        storeReference: validQuote.storeReference,
+        customerReference: null,
+        customerPhoneReference: null,
+        items: [{ sku: "CLIENT-01", quantity: "1" }],
+      }),
+    ).rejects.toMatchObject({
+      code: "PRICING_SERVICE_TIMEOUT",
+      diagnostics: {
+        requestId: expect.any(String),
+        durationMs: expect.any(Number),
+      },
+    });
+  });
+
+  it("retains upstream status without returning upstream response details", async () => {
+    const client = new MemberPricingClient(config, async () =>
+      Response.json(
+        { code: "SERVICE_AUTH_REQUIRED", error: "secret detail not for clients" },
+        { status: 401 },
+      ),
+    );
+    await expect(
+      client.createQuote({
+        channel: "POS",
+        storeReference: validQuote.storeReference,
+        customerReference: null,
+        customerPhoneReference: null,
+        items: [{ sku: "CLIENT-01", quantity: "1" }],
+      }),
+    ).rejects.toMatchObject({
+      code: "PRICING_SERVICE_AUTH_FAILED",
+      diagnostics: { upstreamStatus: 401 },
+    });
+  });
+
+  it("classifies non-JSON upstream errors by their HTTP status", async () => {
+    const client = new MemberPricingClient(config, async () =>
+      new Response("upstream diagnostic detail", {
+        status: 503,
+        headers: { "content-type": "text/html" },
+      }),
+    );
+    await expect(
+      client.createQuote({
+        channel: "POS",
+        storeReference: validQuote.storeReference,
+        customerReference: null,
+        customerPhoneReference: null,
+        items: [{ sku: "CLIENT-01", quantity: "1" }],
+      }),
+    ).rejects.toMatchObject({
+      code: "PRICING_SERVICE_UNAVAILABLE",
+      diagnostics: { upstreamStatus: 503 },
+    });
   });
 
   it("rejects a response with altered totals instead of trusting it", async () => {

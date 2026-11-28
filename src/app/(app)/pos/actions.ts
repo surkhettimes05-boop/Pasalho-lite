@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ZodError } from "zod";
@@ -18,6 +19,7 @@ import {
 } from "@/modules/pricing/pricing.service";
 import { isLoyaltyEarningEnabled } from "@/modules/loyalty/loyalty.service";
 import { dispatchCreatorAttributionOutbox } from "@/modules/creator-attribution/outbox.service";
+import { writeOperationLog } from "@/lib/operation-log";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "");
@@ -144,14 +146,24 @@ export async function quotePosPricingAction(input: {
   items: Array<{ productId: string; quantity: string }>;
 }) {
   const user = await requireCurrentUser();
+  const requestId = randomUUID();
 
   try {
-    const quote = await quotePosPricing(user, input);
+    const quote = await quotePosPricing(user, input, requestId);
     return { ok: true as const, quote };
   } catch (error) {
+    const code = operationError(error);
+    writeOperationLog({
+      requestId,
+      operation: "POS_PRICING_QUOTE",
+      actorId: user.id,
+      status: "failure",
+      errorCategory: code,
+    });
     return {
       ok: false as const,
-      code: operationError(error),
+      code,
+      supportReference: requestId,
     };
   }
 }
