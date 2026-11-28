@@ -1,17 +1,17 @@
-# Offline cash POS — scoped D-022 implementation
+# Offline cash POS — Lite-owned catalog implementation
 
 ## Authorization and pricing
 
 An Owner/Admin signs in online and opens `/offline-pos.html` from the POS page.
-Provisioning calls the existing Modern Trade catalog API, matches SKUs to active
-Lite products, and displays the regular prices. The owner selects the allowed
+Provisioning reads active products and regular selling prices directly from the
+Lite database. Modern Trade is not called. The owner selects the allowed
 SKUs, assigns one active cashier, confirms that the regular prices are tax
 inclusive, and sets a terminal passphrase of at least 12 characters. A device
 ECDSA P-256 key is generated in the browser; its private key is nonextractable
 and held in IndexedDB, while its public key, store, assigned cashier, owner,
 and approval audit are stored in PostgreSQL. The server creates an immutable
 eight-hour snapshot of selected SKUs, barcodes, regular prices, local available
-stock, and policy. Its price source is Modern Trade, never Lite's selling price.
+stock, and policy. Lite's selling price is the authoritative regular price.
 The owner-reviewed price list is submitted with the approval; if the catalog
 changes between review and submission, the server rejects it for re-review.
 
@@ -106,7 +106,7 @@ paper-receipt investigation.
 5. Before daily close, confirm there are no pending local receipts. The server
    blocks synchronization into a closed operating day for manual review.
 6. Renew the approved snapshot online as Owner/Admin only after every local
-   sale is `SYNCED`. Renewal fetches fresh Modern Trade prices and server stock.
+   sale is `SYNCED`. Renewal fetches current Lite prices and server stock.
 7. If a device is stolen, revoke it from the provision endpoint while signed
    in as Owner/Admin. Already printed local receipts must still be collected
    and reviewed. Revocation cannot erase a lost device's local data remotely.
@@ -140,17 +140,15 @@ not declared production ready on automated tests alone.
 
 ## Acceptance evidence still required
 
-The integration suite covers an online approved price snapshot, signed cash
+The integration suite covers an online Lite-owned approved price snapshot, signed cash
 ingestion, idempotent replay, ledger/payment/loyalty checks, historical price
 preservation, expiry/revocation review, and two-terminal stock conflict. Before
 launch, run store hardware tests and a recovery exercise. The browser suite
 uses real Edge/IndexedDB and simulated network outages, with fixture responses
 for provisioning and synchronization. The HTTP E2E test exercises the actual
-Next routes, authentication, PostgreSQL transaction, and idempotent replay
-while a local Modern Trade catalog fixture is stopped before synchronization.
+Next routes, authentication, PostgreSQL transaction, and idempotent replay.
 Still test a real PostgreSQL outage, quota exhaustion, interrupted requests,
-and the live Modern Trade catalog before release. Record results in the release
-report without treating fixture pricing as proof of live Modern Trade behavior.
+and physical store hardware before release. Record results in the release report.
 Run `npm run test:isolated` against local `.env.test` for a fresh migrated and
 seeded PostgreSQL database. Run `npm run test:e2e:offline` for the browser
 suite and `npm run test:e2e:offline-http` for real Next route reconciliation.

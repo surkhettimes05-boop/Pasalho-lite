@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
+import { createPosProductSearchIndex } from "@/modules/pos/product-search";
 import type { IssuedPricingQuote } from "@/modules/pricing/pricing.schemas";
 
 type PosPaymentMethod = "CASH" | "QR_NON_CASH";
@@ -23,7 +24,7 @@ type CustomerSelection = {
   spendRemainder: string;
   membershipNumber: number | null;
   membershipTier: "REGISTERED_MEMBER" | "FOUNDING_1000" | null;
-  membershipStatus: "ACTIVE" | "SUSPENDED" | "CANCELLED" | "NOT_MEMBER";
+  membershipStatus: "ACTIVE" | "SUSPENDED" | "CANCELLED" | "NOT_MEMBER" | "EXTERNAL_UNVERIFIED";
 };
 
 type CustomerActionResult =
@@ -39,10 +40,6 @@ type QuoteActionResult =
   | { ok: true; quote: IssuedPricingQuote }
   | { ok: false; code: string };
 
-function normalized(value: string) {
-  return value.trim().toLowerCase();
-}
-
 function membershipTierLabel(tier: CustomerSelection["membershipTier"]) {
   if (tier === "FOUNDING_1000") return "Founding 1,000";
   if (tier === "REGISTERED_MEMBER") return "Registered member";
@@ -53,6 +50,7 @@ function membershipStatusLabel(
   status: CustomerSelection["membershipStatus"],
 ) {
   if (status === "NOT_MEMBER") return "not a member";
+  if (status === "EXTERNAL_UNVERIFIED") return "external membership not verified; Lite regular price applies";
   return status.toLowerCase();
 }
 
@@ -97,24 +95,8 @@ export function PosRegister({
     () => new Map(products.map((product) => [product.id, product])),
     [products],
   );
-
-  const matches = useMemo(() => {
-    const q = normalized(query);
-
-    if (!q) {
-      return products.slice(0, 20);
-    }
-
-    return products
-      .filter((product) => {
-        return (
-          product.sku.toLowerCase().includes(q) ||
-          product.name.toLowerCase().includes(q) ||
-          product.barcode?.toLowerCase().includes(q)
-        );
-      })
-      .slice(0, 20);
-  }, [products, query]);
+  const productSearch = useMemo(() => createPosProductSearchIndex(products), [products]);
+  const matches = useMemo(() => productSearch.search(query), [productSearch, query]);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,17 +286,7 @@ export function PosRegister({
 
   function submitSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const q = normalized(query);
-
-    if (!q) {
-      return;
-    }
-
-    const exact = products.find(
-      (product) =>
-        normalized(product.barcode ?? "") === q ||
-        normalized(product.sku) === q,
-    );
+    const exact = productSearch.findExact(query);
 
     if (exact) {
       addProduct(exact);

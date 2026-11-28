@@ -81,66 +81,61 @@ async function calculateSnapshot(
   const operatingDate = parseOperatingDate(operatingDateKey);
   const { start, end } = nepalOperatingDayBounds(operatingDateKey);
 
-  const [
-    movements,
-    cashPos,
-    codCollected,
-    qrSales,
-    pendingCod,
-  ] = await Promise.all([
-    tx.cashMovement.findMany({
-      where: {
-        storeLocationId,
-        operatingDate,
+  // Interactive Prisma transactions use one PostgreSQL client. Keep queries
+  // on that client sequential; pg does not support overlapping client.query()
+  // calls, and snapshot reads must stay within this transaction.
+  const movements = await tx.cashMovement.findMany({
+    where: {
+      storeLocationId,
+      operatingDate,
+    },
+    select: {
+      type: true,
+      effect: true,
+      amount: true,
+    },
+  });
+  const cashPos = await tx.payment.aggregate({
+    where: {
+      sourceType: PaymentSourceType.SALE,
+      method: PaymentMethod.CASH,
+      collectedAt: {
+        gte: start,
+        lt: end,
       },
-      select: {
-        type: true,
-        effect: true,
-        amount: true,
+    },
+    _sum: { amount: true },
+  });
+  const codCollected = await tx.payment.aggregate({
+    where: {
+      sourceType: PaymentSourceType.CUSTOMER_ORDER,
+      method: PaymentMethod.COD,
+      collectedAt: {
+        gte: start,
+        lt: end,
       },
-    }),
-    tx.payment.aggregate({
-      where: {
-        sourceType: PaymentSourceType.SALE,
-        method: PaymentMethod.CASH,
-        collectedAt: {
-          gte: start,
-          lt: end,
-        },
+    },
+    _sum: { amount: true },
+  });
+  const qrSales = await tx.payment.aggregate({
+    where: {
+      sourceType: PaymentSourceType.SALE,
+      method: PaymentMethod.QR_NON_CASH,
+      collectedAt: {
+        gte: start,
+        lt: end,
       },
-      _sum: { amount: true },
-    }),
-    tx.payment.aggregate({
-      where: {
-        sourceType: PaymentSourceType.CUSTOMER_ORDER,
-        method: PaymentMethod.COD,
-        collectedAt: {
-          gte: start,
-          lt: end,
-        },
-      },
-      _sum: { amount: true },
-    }),
-    tx.payment.aggregate({
-      where: {
-        sourceType: PaymentSourceType.SALE,
-        method: PaymentMethod.QR_NON_CASH,
-        collectedAt: {
-          gte: start,
-          lt: end,
-        },
-      },
-      _sum: { amount: true },
-    }),
-    tx.customerOrder.aggregate({
-      where: {
-        createdAt: { lt: end },
-        paymentStatus: "PENDING",
-        status: { not: "CANCELLED" },
-      },
-      _sum: { total: true },
-    }),
-  ]);
+    },
+    _sum: { amount: true },
+  });
+  const pendingCod = await tx.customerOrder.aggregate({
+    where: {
+      createdAt: { lt: end },
+      paymentStatus: "PENDING",
+      status: { not: "CANCELLED" },
+    },
+    _sum: { total: true },
+  });
 
   const openingCash = sumAmounts(
     movements.filter(
@@ -224,7 +219,10 @@ export async function getDailyClosePreview(operatingDateKey: string) {
         operatingDate: snapshot.operatingDate,
         status: DailyCloseStatus.CLOSED,
       },
-      include: dailyCloseInclude,
+      // Preview callers only need the link target. Avoid loading the two user
+      // relations here: Prisma may resolve them as parallel queries on this
+      // transaction's single PostgreSQL client.
+      select: { id: true },
     });
 
     return { snapshot, activeClose, store };

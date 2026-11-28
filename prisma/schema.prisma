@@ -3,6 +3,7 @@ generator client {
   runtime  = "nodejs"
   output   = "../src/generated/prisma"
   importFileExtension = "ts"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

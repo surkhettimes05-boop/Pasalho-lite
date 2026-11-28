@@ -48,6 +48,7 @@ const quotePayloadFields = z
       "SUSPENDED",
       "CANCELLED",
       "NOT_MEMBER",
+      "EXTERNAL_UNVERIFIED",
     ]),
     customerStatus: z.string().max(40).nullable(),
     items: z.array(pricingQuoteItemSchema).min(1).max(100),

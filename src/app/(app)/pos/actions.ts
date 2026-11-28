@@ -17,7 +17,6 @@ import {
   quotePosPricing,
 } from "@/modules/pricing/pricing.service";
 import { isLoyaltyEarningEnabled } from "@/modules/loyalty/loyalty.service";
-import { dispatchCreatorAttributionOutbox } from "@/modules/creator-attribution/outbox.service";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "");
@@ -200,9 +199,6 @@ export async function finalizeSaleAction(formData: FormData) {
   } catch (error) {
     redirect(`/pos?error=${encodeURIComponent(operationError(error))}`);
   }
-
-  // Delivery is best-effort: the committed POS sale must never depend on commerce uptime.
-  await dispatchCreatorAttributionOutbox().catch(() => undefined);
 
   revalidatePath("/pos");
   revalidatePath("/customers");

@@ -26,8 +26,11 @@ try {
   run(["--import", "tsx", "prisma/seed.ts"], environment);
   if (process.argv.includes("--canonical")) {
     run(["--conditions=react-server", "--import", "tsx", "scripts/canonical-e2e.ts"], environment);
+  } else if (process.argv.includes("--capacity")) {
+    run(["--conditions=react-server", "--import", "tsx", "scripts/catalog-capacity-test.ts"], environment);
   } else {
-    run(["node_modules/vitest/vitest.mjs", "run"], environment);
+    const testArgs = process.argv.slice(2).filter((argument) => argument !== "--" && argument !== "--capacity");
+    run(["node_modules/vitest/vitest.mjs", "run", ...testArgs], environment);
   }
 } finally {
   await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);

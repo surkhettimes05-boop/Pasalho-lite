@@ -554,3 +554,32 @@ During the first 30 days, track:
 - high-frequency manual workarounds
 
 Fix correctness issues before adding features.
+
+## 16. Local pilot launcher and database guard
+
+Run these checks against the isolated local pilot only:
+
+- Copy `.env.pilot.local.example` to ignored `.env.pilot.local` and supply the
+  existing local `AUTH_SECRET` without committing it.
+- Start the app with `scripts/start-pasalho-pilot.ps1`.
+- The preflight must report `127.0.0.1:55432/pasalho_pilot_acceptance`,
+  schema `public`, and PostgreSQL 18. It must connect in a read-only
+  transaction.
+- Verify the launcher rejects a non-loopback host, a different port or
+  database, an embedded password, a non-test `APP_ENV`, and an occupied web
+  port. Rejection must happen before Next.js starts.
+- Verify the launcher never runs migrations, seed commands, sales, returns,
+  cash movements, or daily-close commands.
+- With an authenticated local pilot session, request Dashboard, POS,
+  Inventory, Reports, Returns, and Daily Close. Each page must render without
+  the PostgreSQL concurrent-query deprecation warning.
+- Confirm the baseline remains three sale rows with NPR 142.50 gross, NPR
+  95.00 refunds, NPR 47.50 net, and the 2026-11-28 daily close is CLOSED with
+  NPR 47.50 expected, NPR 47.50 actual, and NPR 0.00 variance.
+- Run `npm run test:isolated` with `NODE_OPTIONS=--trace-deprecation`. Tests
+  must use an ephemeral database and leave the pilot database unchanged.
+
+The development Prisma client currently enables the Preview
+`relationJoins` feature. Record its version and assess the stable replacement
+described in D-025 before production release. A successful local pilot test is
+not approval to merge or deploy.
